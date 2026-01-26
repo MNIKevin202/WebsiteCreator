@@ -337,22 +337,81 @@ async function caproverSetGitHubDeployment(baseUrl, token, appName, repoUrl, bra
   const repoOwner = repoMatch[1];
   const repoName = repoMatch[2].replace('.git', '');
 
-  // Use update endpoint to set repoInfo
-  return caproverRequest({
+  console.log('[CAPROVER] Setting GitHub deployment for app:', appName, 'repo:', `${repoOwner}/${repoName}`, 'branch:', branch);
+
+  // Get the current app definition to preserve other settings
+  const getResult = await caproverRequest({
+    baseUrl, token,
+    path: '/api/v2/user/apps/appDefinitions',
+    method: 'GET',
+  });
+
+  const apps = getResult?.data?.appDefinitions || [];
+  const app = apps.find(a => a.appName === appName);
+  
+  if (!app) {
+    throw new Error(`App ${appName} not found`);
+  }
+
+  // Merge repoInfo with existing app definition
+  const updatePayload = {
+    appName: app.appName,
+    instanceCount: app.instanceCount || 1,
+    captainDefinitionRelativeFilePath: app.captainDefinitionRelativeFilePath || './captain-definition',
+    notExposeAsWebApp: app.notExposeAsWebApp || false,
+    hasPersistentData: app.hasPersistentData || false,
+    description: app.description || `Auto-configured app: ${appName}`,
+    volumes: app.volumes || [],
+    ports: app.ports || [],
+    preDeployFunction: app.preDeployFunction || '',
+    customNginxConfig: app.customNginxConfig || '',
+    customDomain: app.customDomain || [],
+    forceSsl: app.forceSsl || false,
+    websocketSupport: app.websocketSupport || false,
+    appDeployTokenConfig: app.appDeployTokenConfig || {
+      enabled: false,
+      appDeployToken: ''
+    },
+    // Set repoInfo
+    repoInfo: {
+      repo: `${repoOwner}/${repoName}`,
+      branch: branch || 'main',
+      user: repoOwner, // GitHub username
+      password: githubToken, // Use token instead of password
+      sshKey: ''
+    },
+    // Preserve containerHttpPort if it exists
+    containerHttpPort: app.containerHttpPort || undefined,
+  };
+
+  // Remove undefined fields
+  Object.keys(updatePayload).forEach(key => {
+    if (updatePayload[key] === undefined) {
+      delete updatePayload[key];
+    }
+  });
+
+  console.log('[CAPROVER] Updating app with repoInfo:', updatePayload.repoInfo);
+
+  // Use update endpoint to set repoInfo along with other settings
+  const result = await caproverRequest({
     baseUrl, token,
     path: '/api/v2/user/apps/appDefinitions/update',
     method: 'POST',
-    body: {
-      appName,
-      repoInfo: {
-        repo: `${repoOwner}/${repoName}`,
-        branch: branch || 'main',
-        user: repoOwner, // GitHub username
-        password: githubToken, // Use token instead of password
-        sshKey: ''
-      }
-    },
+    body: updatePayload,
   });
+
+  console.log('[CAPROVER] GitHub deployment update result:', JSON.stringify(result).slice(0, 500));
+
+  // Check for CapRover error status codes (>= 1000 means error)
+  if (result && typeof result === 'object' && result.status !== undefined) {
+    if (result.status >= 1000) {
+      const errorMsg = result.description || result.message || `CapRover API error (status: ${result.status})`;
+      throw new Error(`Failed to set GitHub deployment: ${errorMsg} (Status: ${result.status})`);
+    }
+  }
+
+  return result;
 }
 
 module.exports = {

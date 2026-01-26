@@ -341,8 +341,8 @@ WORKDIR /usr/src/app
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies
-RUN npm ci --omit=dev && npm cache clean --force
+# Install dependencies (using npm install since we don't have package-lock.json yet)
+RUN npm install --omit=dev && npm cache clean --force
 
 # Copy application files
 COPY . .
