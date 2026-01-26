@@ -221,27 +221,6 @@
     <!-- Toast Notification Container -->
     <div id="toastContainer" class="toast-container"></div>
 
-    <!-- Hostinger DNS Iframe Modal -->
-    <div id="hostingerModal" class="modal" style="display: none;">
-        <div class="modal-content" style="max-width: 95vw; width: 95vw; height: 95vh; max-height: 95vh;">
-            <div class="modal-header">
-                <h2 id="hostingerModalTitle">Hostinger DNS Settings</h2>
-                <button class="modal-close" onclick="closeHostingerModal()">&times;</button>
-            </div>
-            <div class="modal-body" style="padding: 0; position: relative; flex: 1; min-height: 0;">
-                <iframe id="hostingerIframe" src="" style="width: 100%; height: 100%; border: none; border-radius: 0 0 16px 16px;"></iframe>
-                <div class="iframe-overlay-buttons">
-                    <button onclick="fillHostingerFields()" class="btn-primary" style="width: auto; padding: 12px 24px;">
-                        ⚡ Auto-Fill DNS Fields
-                    </button>
-                    <button onclick="closeHostingerModal()" class="btn-secondary" style="width: auto; padding: 12px 24px;">
-                        Close
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <script src="script.js"></script>
 </body>
 </html>
