@@ -737,8 +737,81 @@ function copyErrorToClipboard() {
         }, 2000);
     }).catch(err => {
         console.error('Failed to copy:', err);
-        alert('Failed to copy to clipboard');
+        showToast('Failed to copy to clipboard', 'error');
     });
+}
+
+// Confirmation Modal Functions
+let confirmModalCallback = null;
+
+function showConfirmModal(title, message, callback, confirmText = 'Confirm', confirmType = 'danger') {
+    const modal = document.getElementById('confirmModal');
+    const modalTitle = document.getElementById('confirmModalTitle');
+    const modalMessage = document.getElementById('confirmModalMessage');
+    const confirmBtn = document.getElementById('confirmModalOkBtn');
+    
+    modalTitle.textContent = title || 'Confirm';
+    modalMessage.textContent = message;
+    confirmBtn.textContent = confirmText;
+    
+    // Set button style based on type
+    confirmBtn.className = confirmType === 'danger' ? 'btn-danger' : 'btn-primary';
+    confirmBtn.style.width = 'auto';
+    
+    confirmModalCallback = callback;
+    
+    modal.classList.add('show');
+    modal.style.display = 'flex';
+}
+
+function closeConfirmModal() {
+    const modal = document.getElementById('confirmModal');
+    modal.classList.remove('show');
+    setTimeout(() => {
+        modal.style.display = 'none';
+        confirmModalCallback = null;
+    }, 200);
+}
+
+function confirmModalAction() {
+    if (confirmModalCallback) {
+        confirmModalCallback();
+    }
+    closeConfirmModal();
+}
+
+// Toast Notification Functions
+function showToast(message, type = 'info', duration = 5000) {
+    const container = document.getElementById('toastContainer');
+    if (!container) return;
+    
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    
+    const icons = {
+        success: '✅',
+        error: '❌',
+        warning: '⚠️',
+        info: 'ℹ️'
+    };
+    
+    toast.innerHTML = `
+        <span class="toast-icon">${icons[type] || icons.info}</span>
+        <span class="toast-content">${escapeHtml(message)}</span>
+        <button class="toast-close" onclick="this.parentElement.remove()">&times;</button>
+    `;
+    
+    container.appendChild(toast);
+    
+    // Auto remove after duration
+    setTimeout(() => {
+        toast.classList.add('hiding');
+        setTimeout(() => {
+            if (toast.parentElement) {
+                toast.remove();
+            }
+        }, 300);
+    }, duration);
 }
 
 function escapeHtml(text) {
