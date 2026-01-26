@@ -284,12 +284,33 @@ async function createCapRoverApp(appName, authToken) {
       data: JSON.stringify(response.data)
     });
     
-    // Check if the response indicates success
+    // CapRover returns HTTP 200 even for errors, but includes error status in response body
+    // Parse response data to check for errors
+    let responseData = response.data;
+    if (typeof responseData === 'string') {
+      try {
+        responseData = JSON.parse(responseData);
+      } catch (e) {
+        // If parsing fails, treat as error
+        throw new Error(`CapRover API returned invalid response: ${responseData}`);
+      }
+    }
+    
+    // Check if response contains an error status (CapRover uses status codes in response body)
+    if (responseData && typeof responseData === 'object' && responseData.status !== undefined) {
+      // CapRover error status codes are typically >= 1000
+      if (responseData.status >= 1000) {
+        const errorMsg = responseData.description || responseData.message || `CapRover API error (status: ${responseData.status})`;
+        throw new Error(`CapRover API error: ${errorMsg} (Status: ${responseData.status})`);
+      }
+    }
+    
+    // Check if the HTTP response indicates success
     if (response.status >= 200 && response.status < 300) {
       console.log(`✅ CapRover app "${appName}" creation API call succeeded`);
-      return { success: true, appName, response: response.data };
+      return { success: true, appName, response: responseData };
     } else {
-      throw new Error(`CapRover API returned unexpected status: ${response.status}`);
+      throw new Error(`CapRover API returned unexpected HTTP status: ${response.status}`);
     }
   } catch (error) {
     if (error.response) {
@@ -414,6 +435,27 @@ async function configureCapRoverApp(appName, repoUrl, branch, username, password
         'x-captain-auth': authToken
       }
     });
+    
+    // CapRover returns HTTP 200 even for errors, but includes error status in response body
+    // Parse response data to check for errors
+    let responseData = response.data;
+    if (typeof responseData === 'string') {
+      try {
+        responseData = JSON.parse(responseData);
+      } catch (e) {
+        // If parsing fails, treat as error
+        throw new Error(`CapRover API returned invalid response: ${responseData}`);
+      }
+    }
+    
+    // Check if response contains an error status (CapRover uses status codes in response body)
+    if (responseData && typeof responseData === 'object' && responseData.status !== undefined) {
+      // CapRover error status codes are typically >= 1000
+      if (responseData.status >= 1000) {
+        const errorMsg = responseData.description || responseData.message || `CapRover API error (status: ${responseData.status})`;
+        throw new Error(`CapRover API error: ${errorMsg} (Status: ${responseData.status})`);
+      }
+    }
     
     return { success: true };
   } catch (error) {
@@ -574,16 +616,42 @@ app.post('/api/create-website', requireAuth, async (req, res) => {
         // Verify the app was actually created
         console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 4: Verifying app was created...`);
         await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second for CapRover to process
-        const verifyApp = await getAppDefinition(projectName, authToken);
-        if (verifyApp) {
-          console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] ✅ Step 4: Verified - CapRover app "${projectName}" exists`);
+        let verifyApp = await getAppDefinition(projectName, authToken);
+        
+        // If app not found and error was auth-related, retry with fresh token
+        if (!verifyApp) {
+          console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 4: App not found, checking if auth token expired...`);
+          // Re-authenticate and retry verification
+          const freshToken = await getCapRoverAuthToken();
+          verifyApp = await getAppDefinition(projectName, freshToken);
+          if (verifyApp) {
+            authToken = freshToken; // Use fresh token for subsequent operations
+            console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] ✅ Step 4: Verified - CapRover app "${projectName}" exists (after re-auth)`);
+          } else {
+            throw new Error(`CapRover app "${projectName}" was not created successfully. The API call succeeded but the app does not exist.`);
+          }
         } else {
-          console.error(`[${new Date().toISOString()}] [REQUEST ${requestId}] ⚠️ Step 4: WARNING - CapRover app "${projectName}" was not found after creation!`);
-          throw new Error(`CapRover app "${projectName}" was not created successfully. The API call succeeded but the app does not exist.`);
+          console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] ✅ Step 4: Verified - CapRover app "${projectName}" exists`);
         }
       } catch (error) {
-        console.error(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 4: Failed to create CapRover app:`, error.message);
-        throw error; // Re-throw to be caught by outer catch
+        // If error is auth-related, try re-authenticating and retrying once
+        if (error.message && error.message.includes('Auth token corrupted')) {
+          console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 4: Auth token expired, re-authenticating and retrying...`);
+          const freshToken = await getCapRoverAuthToken();
+          await createCapRoverApp(projectName, freshToken);
+          authToken = freshToken; // Use fresh token for subsequent operations
+          
+          // Verify again
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          const verifyApp = await getAppDefinition(projectName, freshToken);
+          if (!verifyApp) {
+            throw new Error(`CapRover app "${projectName}" was not created successfully after retry.`);
+          }
+          console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] ✅ Step 4: CapRover app created successfully after re-auth`);
+        } else {
+          console.error(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 4: Failed to create CapRover app:`, error.message);
+          throw error; // Re-throw to be caught by outer catch
+        }
       }
     } else {
       console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 4: Skipping app creation (app already exists)`);
