@@ -665,6 +665,24 @@ function resetForm() {
     form.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
+// Toggle domain field visibility
+function toggleDomainField() {
+    const isDomain = document.getElementById('isDomain').checked;
+    const domainInput = document.getElementById('domain');
+    const domainHelp = document.getElementById('domainHelp');
+    
+    if (isDomain) {
+        domainInput.style.display = 'block';
+        domainInput.required = true;
+        domainHelp.style.display = 'block';
+    } else {
+        domainInput.style.display = 'none';
+        domainInput.required = false;
+        domainHelp.style.display = 'none';
+        domainInput.value = '';
+    }
+}
+
 // Validate project name format
 const projectNameInput = document.getElementById('projectName');
 if (projectNameInput) {
