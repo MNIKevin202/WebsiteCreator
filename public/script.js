@@ -903,6 +903,7 @@ form.addEventListener('submit', async (e) => {
     const formData = {
         projectName: document.getElementById('projectName').value.trim(),
         branch: document.getElementById('branch').value.trim() || 'main',
+        port: document.getElementById('port').value.trim() || null,
         isDomain: document.getElementById('isDomain').checked,
         domain: document.getElementById('domain').value.trim() || null
     };
@@ -1019,10 +1020,47 @@ form.addEventListener('submit', async (e) => {
 function resetForm() {
     form.reset();
     document.getElementById('isDomain').checked = false;
+    document.getElementById('port').value = '';
     toggleDomainField();
     resultCard.style.display = 'none';
     errorCard.style.display = 'none';
     form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// Generate an available port
+async function generatePort() {
+    const portInput = document.getElementById('port');
+    const generateBtn = event.target;
+    const originalText = generateBtn.textContent;
+    
+    generateBtn.disabled = true;
+    generateBtn.textContent = 'Generating...';
+    
+    try {
+        const response = await fetch('/api/generate-port', {
+            method: 'GET',
+            credentials: 'include'
+        });
+        
+        if (response.status === 401) {
+            showLogin();
+            throw new Error('Session expired. Please login again.');
+        }
+        
+        const data = await response.json();
+        
+        if (data.success && data.port) {
+            portInput.value = data.port;
+            showToast(`Generated port: ${data.port}`, 'success');
+        } else {
+            throw new Error(data.error || 'Failed to generate port');
+        }
+    } catch (error) {
+        showErrorModal('Port Generation Failed', error.message || 'Failed to generate an available port. Please try again.');
+    } finally {
+        generateBtn.disabled = false;
+        generateBtn.textContent = originalText;
+    }
 }
 
 // Toggle domain field visibility

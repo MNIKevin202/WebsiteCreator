@@ -988,9 +988,22 @@ app.post('/api/create-website', requireAuth, async (req, res) => {
     const token = await caproverLogin(baseUrl, CAPROVER_PASSWORD);
     console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 2: ✅ CapRover authentication successful`);
     
-    // Step 3: Determine port (standardize to 3000 for all Node apps)
-    const containerPort = 3000; // Standard port for all apps
-    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 3: Using standard container port: ${containerPort}`);
+    // Step 3: Determine port (use provided port or generate one)
+    let containerPort;
+    if (req.body.port) {
+      containerPort = parseInt(req.body.port, 10);
+      if (isNaN(containerPort) || containerPort < 3000 || containerPort > 65535) {
+        return res.status(400).json({ error: 'Invalid port. Port must be between 3000 and 65535.' });
+      }
+      console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 3: Using provided container port: ${containerPort}`);
+    } else {
+      // Generate an available port
+      console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 3: Generating available port...`);
+      const apps = await caproverListApps(baseUrl, token);
+      const usedPorts = new Set(apps.map(app => app.containerHttpPort).filter(p => p && p > 0));
+      containerPort = findNextAvailablePort(usedPorts, 3000);
+      console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 3: Generated available port: ${containerPort} (used ports: ${Array.from(usedPorts).join(', ') || 'none'})`);
+    }
     
     // Step 4: Ensure app exists (idempotent)
     console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 4: Ensuring CapRover app exists: ${projectName}`);
