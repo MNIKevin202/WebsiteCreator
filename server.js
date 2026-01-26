@@ -189,12 +189,21 @@ function findNextAvailablePort(usedPorts, startPort = 3000) {
 // Create GitHub repository
 async function createGitHubRepo(repoName, isPrivate = true) {
   try {
+    if (!GITHUB_TOKEN) {
+      throw new Error('GITHUB_TOKEN environment variable is not set');
+    }
+    
+    console.log(`[${new Date().toISOString()}] Creating GitHub repository: ${repoName} (private: ${isPrivate})`);
+    
     const response = await githubAPI.post('/user/repos', {
       name: repoName,
       private: isPrivate,
       auto_init: true,
       description: `Auto-created by Website Creator`
     });
+    
+    console.log(`[${new Date().toISOString()}] ✅ GitHub repository created successfully: ${response.data.html_url}`);
+    
     return {
       success: true,
       repoUrl: response.data.html_url,
@@ -202,8 +211,17 @@ async function createGitHubRepo(repoName, isPrivate = true) {
       repoName: response.data.name
     };
   } catch (error) {
+    console.error(`[${new Date().toISOString()}] ❌ GitHub API error details:`, {
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      data: error.response?.data,
+      message: error.message
+    });
+    
     if (error.response) {
-      throw new Error(`GitHub API error: ${error.response.data.message || error.message}`);
+      const errorData = error.response.data;
+      const errorMessage = errorData?.message || errorData?.errors?.[0]?.message || error.response.statusText || 'Repository creation failed';
+      throw new Error(`GitHub API error: ${errorMessage} (Status: ${error.response.status})`);
     }
     throw new Error(`Failed to create GitHub repo: ${error.message}`);
   }
