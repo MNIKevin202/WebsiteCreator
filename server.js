@@ -301,7 +301,13 @@ async function createCapRoverApp(appName, authToken) {
       // CapRover error status codes are typically >= 1000
       if (responseData.status >= 1000) {
         const errorMsg = responseData.description || responseData.message || `CapRover API error (status: ${responseData.status})`;
-        throw new Error(`CapRover API error: ${errorMsg} (Status: ${responseData.status})`);
+        const error = new Error(`CapRover API error: ${errorMsg} (Status: ${responseData.status})`);
+        // Mark auth token errors for retry logic
+        if (responseData.status === 1106 || errorMsg.toLowerCase().includes('auth token')) {
+          error.isAuthTokenError = true;
+          error.statusCode = responseData.status;
+        }
+        throw error;
       }
     }
     
@@ -313,6 +319,9 @@ async function createCapRoverApp(appName, authToken) {
       throw new Error(`CapRover API returned unexpected HTTP status: ${response.status}`);
     }
   } catch (error) {
+    // Preserve auth token error flag if it exists
+    const isAuthTokenError = error.isAuthTokenError || false;
+    
     if (error.response) {
       const errorData = error.response.data || {};
       const status = error.response.status;
@@ -338,10 +347,18 @@ async function createCapRoverApp(appName, authToken) {
       }
       
       const errorDetails = `Status: ${status}${statusText ? ` (${statusText})` : ''}, Data: ${JSON.stringify(errorData)}`;
-      throw new Error(`CapRover API error: ${errorMessage}. Details: ${errorDetails}`);
+      const newError = new Error(`CapRover API error: ${errorMessage}. Details: ${errorDetails}`);
+      if (isAuthTokenError || status === 1106 || errorMessage.toLowerCase().includes('auth token')) {
+        newError.isAuthTokenError = true;
+      }
+      throw newError;
     }
     console.error('❌ CapRover API error (no response):', error.message);
-    throw new Error(`Failed to create CapRover app: ${error.message}`);
+    const newError = new Error(`Failed to create CapRover app: ${error.message}`);
+    if (isAuthTokenError) {
+      newError.isAuthTokenError = true;
+    }
+    throw newError;
   }
 }
 
@@ -635,7 +652,7 @@ app.post('/api/create-website', requireAuth, async (req, res) => {
         }
       } catch (error) {
         // If error is auth-related, try re-authenticating and retrying once
-        if (error.message && error.message.includes('Auth token corrupted')) {
+        if (error.isAuthTokenError || (error.message && error.message.includes('Auth token corrupted'))) {
           console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 4: Auth token expired, re-authenticating and retrying...`);
           const freshToken = await getCapRoverAuthToken();
           await createCapRoverApp(projectName, freshToken);
