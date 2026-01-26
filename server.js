@@ -1113,6 +1113,37 @@ app.post('/api/create-website', requireAuth, async (req, res) => {
   }
 });
 
+// API endpoint to generate an available port
+app.get('/api/generate-port', requireAuth, async (req, res) => {
+  try {
+    if (!CAPROVER_URL || !CAPROVER_PASSWORD) {
+      return res.status(400).json({
+        success: false,
+        error: 'CapRover credentials not configured'
+      });
+    }
+
+    const baseUrl = CAPROVER_URL.replace(/\/+$/, '');
+    const token = await caproverLogin(baseUrl, CAPROVER_PASSWORD);
+    const apps = await caproverListApps(baseUrl, token);
+    
+    const usedPorts = new Set(apps.map(app => app.containerHttpPort).filter(p => p && p > 0));
+    const availablePort = findNextAvailablePort(usedPorts, 3000);
+    
+    res.json({
+      success: true,
+      port: availablePort,
+      usedPorts: Array.from(usedPorts)
+    });
+  } catch (error) {
+    console.error(`[${new Date().toISOString()}] Error generating port:`, error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to generate port'
+    });
+  }
+});
+
 // List GitHub repositories (protected)
 app.get('/api/repos', requireAuth, async (req, res) => {
   try {
