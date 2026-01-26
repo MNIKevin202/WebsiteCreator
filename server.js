@@ -300,7 +300,21 @@ app.post('/api/create-website', async (req, res) => {
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok' });
+  res.json({ 
+    status: 'ok',
+    port: PORT,
+    timestamp: new Date().toISOString(),
+    env: {
+      hasGithubToken: !!GITHUB_TOKEN,
+      hasCaproverUrl: !!CAPROVER_URL,
+      hasCaproverPassword: !!CAPROVER_PASSWORD
+    }
+  });
+});
+
+// Root endpoint
+app.get('/', (req, res) => {
+  res.sendFile(__dirname + '/public/index.html');
 });
 
 app.listen(PORT, '0.0.0.0', () => {
