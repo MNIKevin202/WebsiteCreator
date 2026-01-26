@@ -799,18 +799,42 @@ app.post('/api/create-website', requireAuth, async (req, res) => {
     await caproverSetContainerHttpPort(baseUrl, token, projectName, containerPort);
     console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 5: ✅ Container HTTP port set to ${containerPort}`);
     
-    // Step 6: Set environment variables
+    // Step 6: Set environment variables (copy from template app "a-staxxio-web")
     console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 6: Setting environment variables...`);
-    const envVars = {
-      PORT: String(containerPort),
-      GITHUB_USERNAME: GITHUB_USERNAME,
-      GITHUB_TOKEN: GITHUB_TOKEN,
-      REPO_NAME: projectName,
-      REPO_URL: githubResult.cloneUrl,
-      REPO_BRANCH: branch
-    };
+    
+    // Get environment variables from template app
+    const templateAppName = 'a-staxxio-web';
+    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 6a: Fetching env vars from template app: ${templateAppName}...`);
+    const templateEnvCheck = await caproverGetEnvVars(baseUrl, token, templateAppName);
+    
+    let envVars = {};
+    
+    if (templateEnvCheck.ok) {
+      const templateEnvVarsData = templateEnvCheck.result?.data?.envVars || templateEnvCheck.result?.envVars || [];
+      // Convert array of {key, value} to object
+      templateEnvVarsData.forEach(env => {
+        const key = env.key || env.name;
+        const value = env.value;
+        if (key && value !== undefined) {
+          envVars[key] = value;
+        }
+      });
+      console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 6a: ✅ Copied ${Object.keys(envVars).length} env vars from template app`);
+    } else {
+      console.warn(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 6a: ⚠️ Could not fetch template env vars: ${templateEnvCheck.message}. Using defaults.`);
+    }
+    
+    // Override with app-specific variables
+    envVars.PORT = String(containerPort);
+    envVars.GITHUB_USERNAME = GITHUB_USERNAME;
+    envVars.GITHUB_TOKEN = GITHUB_TOKEN;
+    envVars.REPO_NAME = projectName;
+    envVars.REPO_URL = githubResult.cloneUrl;
+    envVars.REPO_BRANCH = branch;
+    
+    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 6b: Applying ${Object.keys(envVars).length} env vars to new app...`);
     await caproverSetEnvVars(baseUrl, token, projectName, envVars);
-    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 6: ✅ Environment variables set`);
+    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 6: ✅ Environment variables set (${Object.keys(envVars).length} total)`);
     
     // Step 7: Verify env vars were applied
     console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 7: Verifying environment variables...`);
