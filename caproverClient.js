@@ -250,6 +250,8 @@ async function caproverSetCustomDomains(baseUrl, token, appName, domains) {
     throw new Error('domains must be an array');
   }
 
+  console.log('[CAPROVER] Setting custom domains for app:', appName, 'domains:', domains);
+
   // First, get the current app definition to preserve other settings
   const getResult = await caproverRequest({
     baseUrl, token,
@@ -264,6 +266,12 @@ async function caproverSetCustomDomains(baseUrl, token, appName, domains) {
     throw new Error(`App ${appName} not found`);
   }
 
+  // Merge new domains with existing domains (don't replace, add to existing)
+  const existingDomains = app.customDomain || [];
+  const allDomains = [...new Set([...existingDomains, ...domains])]; // Remove duplicates
+  
+  console.log('[CAPROVER] Existing domains:', existingDomains, 'New domains:', domains, 'Merged:', allDomains);
+
   // Merge custom domains with existing app definition
   const updatePayload = {
     appName: app.appName,
@@ -276,7 +284,7 @@ async function caproverSetCustomDomains(baseUrl, token, appName, domains) {
     ports: app.ports || [],
     preDeployFunction: app.preDeployFunction || '',
     customNginxConfig: app.customNginxConfig || '',
-    customDomain: domains, // Set the new custom domains
+    customDomain: allDomains, // Merge with existing domains
     forceSsl: app.forceSsl || false,
     websocketSupport: app.websocketSupport || false,
     appDeployTokenConfig: app.appDeployTokenConfig || {
@@ -296,13 +304,19 @@ async function caproverSetCustomDomains(baseUrl, token, appName, domains) {
     }
   });
 
+  console.log('[CAPROVER] Updating app with payload (customDomain):', updatePayload.customDomain);
+
   // Use update endpoint to set customDomain along with other settings
-  return caproverRequest({
+  const result = await caproverRequest({
     baseUrl, token,
     path: '/api/v2/user/apps/appDefinitions/update',
     method: 'POST',
     body: updatePayload,
   });
+
+  console.log('[CAPROVER] Custom domains update result:', JSON.stringify(result).slice(0, 500));
+
+  return result;
 }
 
 // Configure GitHub deployment
