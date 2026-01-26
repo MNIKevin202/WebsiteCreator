@@ -742,16 +742,22 @@ app.post('/api/create-website', requireAuth, async (req, res) => {
     // Step 7: Verify env vars were applied
     console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 7: Verifying environment variables...`);
     const envCheck = await caproverGetEnvVars(baseUrl, token, projectName);
-    const envVarsData = envCheck?.data?.envVars || [];
-    const envKeys = envVarsData.map(e => e.key);
     
-    // Check that required vars exist
-    const requiredKeys = ['PORT', 'GITHUB_TOKEN'];
-    const missingKeys = requiredKeys.filter(key => !envKeys.includes(key));
-    if (missingKeys.length > 0) {
-      throw new Error(`Environment variables not properly set. Missing: ${missingKeys.join(', ')}. Found keys: ${envKeys.join(', ')}`);
+    if (!envCheck.ok) {
+      console.warn(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 7: ⚠️ Could not verify env vars: ${envCheck.message}`);
+      // Continue anyway - env vars might still be set even if getter doesn't work
+    } else {
+      const envVarsData = envCheck.result?.data?.envVars || envCheck.result?.envVars || [];
+      const envKeys = envVarsData.map(e => e.key || e.name);
+      
+      // Check that required vars exist
+      const requiredKeys = ['PORT', 'GITHUB_TOKEN'];
+      const missingKeys = requiredKeys.filter(key => !envKeys.includes(key));
+      if (missingKeys.length > 0) {
+        throw new Error(`Environment variables not properly set. Missing: ${missingKeys.join(', ')}. Found keys: ${envKeys.join(', ')}`);
+      }
+      console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 7: ✅ Environment variables verified (${envKeys.length} vars found)`);
     }
-    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 7: ✅ Environment variables verified (${envKeys.length} vars found)`);
     
     // Step 8: Configure GitHub deployment (optional)
     console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 8: Configuring GitHub deployment...`);

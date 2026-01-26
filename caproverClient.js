@@ -7,7 +7,7 @@ const safePreview = (val) => {
   return s.slice(0, 4) + '...' + s.slice(-4);
 };
 
-async function caproverRequest({ baseUrl, path, method = 'GET', token = null, body = null }) {
+async function caproverRequest({ baseUrl, path, method = 'GET', token = null, body = null, allow404 = false }) {
   const url = baseUrl.replace(/\/+$/, '') + path;
   const headers = { 'x-namespace': 'captain' };
   if (token) headers['x-captain-auth'] = token;
@@ -41,9 +41,16 @@ async function caproverRequest({ baseUrl, path, method = 'GET', token = null, bo
       ? (errorData.length > 500 ? errorData.slice(0, 500) + '…' : errorData)
       : JSON.stringify(errorData).slice(0, 500);
     
-    console.log('[CAPROVER]', method, path, 'ERROR status=', error.response?.status, 'body=', errorPreview);
+    const status = error.response?.status;
     
-    throw new Error(`CapRover ${method} ${path} failed: ${error.response?.status || 'network'} ${errorPreview}`);
+    console.log('[CAPROVER]', method, path, 'ERROR status=', status, 'body=', errorPreview);
+    
+    // If allow404 and status is 404, return special marker instead of throwing
+    if (allow404 && status === 404) {
+      return { __notFound: true, status: status, body: errorPreview };
+    }
+    
+    throw new Error(`CapRover ${method} ${path} failed: ${status || 'network'} ${errorPreview}`);
   }
 }
 
@@ -119,33 +126,90 @@ async function caproverSetContainerHttpPort(baseUrl, token, appName, containerPo
   return { ok: true, method: 'update' };
 }
 
-// Set env vars
+// Set env vars with fallback probe for different CapRover versions
 async function caproverSetEnvVars(baseUrl, token, appName, envObj) {
   const envVars = Object.entries(envObj).map(([key, value]) => ({
     key,
     value: String(value),
   }));
 
-  return caproverRequest({
-    baseUrl,
-    token,
-    path: '/api/v2/user/apps/appDefinitions/updateEnvVars',
-    method: 'POST',
-    body: {
-      appName,
-      envVars,
-    },
-  });
+  // Known endpoint variants across CapRover versions
+  const candidates = [
+    '/api/v2/user/apps/appDefinitions/updateEnvVars',
+    '/api/v2/user/apps/appDefinitions/updateAppEnvVars',
+    '/api/v2/user/apps/appDefinitions/updateAppEnvVar',      // some forks
+    '/api/v2/user/apps/appDefinitions/updateEnvVar',         // some forks
+    '/api/v2/user/apps/appDefinitions/saveEnvVars',          // older naming sometimes
+    '/api/v2/user/apps/appDefinitions/setEnvVars',           // older naming sometimes
+    '/api/v2/user/apps/appDefinitions/update',               // last resort (may accept envVars)
+  ];
+
+  // Try each endpoint until one is not 404
+  let lastErr = null;
+
+  for (const path of candidates) {
+    try {
+      const body =
+        path.endsWith('/update')
+          ? { appName, envVars } // some versions might accept this in update
+          : { appName, envVars };
+
+      const result = await caproverRequest({
+        baseUrl,
+        token,
+        path,
+        method: 'POST',
+        body,
+        allow404: true,
+      });
+
+      if (result && result.__notFound) {
+        continue; // try next endpoint
+      }
+
+      console.log('[CAPROVER] env vars updated using:', path);
+      return { ok: true, usedEndpoint: path, result };
+    } catch (e) {
+      lastErr = e;
+      // If it wasn't 404, stop: that's a real failure, not version mismatch
+      if (!String(e.message).includes(' 404 ')) throw e;
+    }
+  }
+
+  throw new Error(
+    `Could not find a working CapRover env var endpoint. Tried: ${candidates.join(', ')}. Last error: ${lastErr?.message || 'unknown'}`
+  );
 }
 
 async function caproverGetEnvVars(baseUrl, token, appName) {
-  return caproverRequest({
-    baseUrl,
-    token,
-    path: '/api/v2/user/apps/appDefinitions/getEnvVars',
-    method: 'POST',
-    body: { appName },
-  });
+  const candidates = [
+    '/api/v2/user/apps/appDefinitions/getEnvVars',
+    '/api/v2/user/apps/appDefinitions/getAppEnvVars',
+    '/api/v2/user/apps/appDefinitions/envVars',
+  ];
+
+  for (const path of candidates) {
+    try {
+      const result = await caproverRequest({
+        baseUrl,
+        token,
+        path,
+        method: 'POST',
+        body: { appName },
+        allow404: true,
+      });
+
+      if (result && result.__notFound) continue;
+
+      console.log('[CAPROVER] env vars fetched using:', path);
+      return { ok: true, usedEndpoint: path, result };
+    } catch (e) {
+      // If it wasn't 404, stop: that's a real failure
+      if (!String(e.message).includes(' 404 ')) throw e;
+    }
+  }
+
+  return { ok: false, message: 'No env var getter endpoint found on this CapRover version' };
 }
 
 // Configure GitHub deployment
