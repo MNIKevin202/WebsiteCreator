@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Website Creator - CapRover & GitHub Automation</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🚀 Website Creator</h1>
+            <p class="subtitle">Automate GitHub repo creation and CapRover app setup</p>
+        </header>
+
+        <main>
+            <form id="createForm" class="form-card">
+                <div class="form-group">
+                    <label for="projectName">Project Name *</label>
+                    <input 
+                        type="text" 
+                        id="projectName" 
+                        name="projectName" 
+                        required 
+                        placeholder="my-awesome-project"
+                        pattern="[a-z0-9-]+"
+                        title="Only lowercase letters, numbers, and hyphens allowed"
+                    >
+                    <small>This will be used for both GitHub repo and CapRover app name</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="branch">Git Branch</label>
+                    <input 
+                        type="text" 
+                        id="branch" 
+                        name="branch" 
+                        value="main"
+                        placeholder="main"
+                    >
+                    <small>Default branch for deployment</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="githubUsername">GitHub Username *</label>
+                    <input 
+                        type="text" 
+                        id="githubUsername" 
+                        name="githubUsername" 
+                        required
+                        placeholder="your-username"
+                    >
+                    <small>Your GitHub username</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="githubPassword">GitHub Token/Password *</label>
+                    <input 
+                        type="password" 
+                        id="githubPassword" 
+                        name="githubPassword" 
+                        required
+                        placeholder="ghp_xxxxxxxxxxxx"
+                    >
+                    <small>GitHub Personal Access Token (recommended) or password</small>
+                </div>
+
+                <button type="submit" id="submitBtn" class="btn-primary">
+                    <span class="btn-text">Create Website</span>
+                    <span class="btn-loader" style="display: none;">⏳ Creating...</span>
+                </button>
+            </form>
+
+            <div id="result" class="result-card" style="display: none;">
+                <h2>✅ Success!</h2>
+                <div id="resultContent"></div>
+                <button onclick="resetForm()" class="btn-secondary">Create Another</button>
+            </div>
+
+            <div id="error" class="error-card" style="display: none;">
+                <h2>❌ Error</h2>
+                <div id="errorContent"></div>
+                <button onclick="resetForm()" class="btn-secondary">Try Again</button>
+            </div>
+        </main>
+
+        <footer>
+            <p>Made with ❤️ for CapRover automation</p>
+        </footer>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
