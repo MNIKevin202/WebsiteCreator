@@ -287,7 +287,204 @@ async function deleteGitHubRepo(repoName) {
   }
 }
 
-// Create GitHub repository
+// Push default starter files to GitHub repository
+async function pushDefaultFilesToGitHub(repoOwner, repoName, branch = 'main') {
+  try {
+    console.log(`[${new Date().toISOString()}] Pushing default files to GitHub repo: ${repoOwner}/${repoName}`);
+
+    // Default files to create
+    const defaultFiles = {
+      'server.js': `const express = require('express');
+const path = require('path');
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+// Serve static files from public directory
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Serve index.html for all routes (SPA support)
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(\`Server running on port \${PORT}\`);
+  console.log(\`Listening on: 0.0.0.0:\${PORT}\`);
+});
+`,
+      'package.json': `{
+  "name": "${repoName}",
+  "version": "1.0.0",
+  "description": "Auto-generated website",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
+`,
+      'Dockerfile': `FROM node:18-alpine
+
+WORKDIR /usr/src/app
+
+# Copy package files
+COPY package*.json ./
+
+# Install dependencies
+RUN npm ci --omit=dev && npm cache clean --force
+
+# Copy application files
+COPY . .
+
+# Create non-root user for security
+RUN addgroup -g 1001 -S nodejs && \\
+    adduser -S nodejs -u 1001 && \\
+    chown -R nodejs:nodejs /usr/src/app
+
+USER nodejs
+
+# Expose port
+EXPOSE 3000
+
+# Start the application
+CMD ["npm", "start"]
+`,
+      'captain-definition': `{
+  "schemaVersion": 2,
+  "dockerfilePath": "./Dockerfile"
+}
+`,
+      'public/index.html': `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome</title>
+    <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+    <div class="container">
+        <div class="welcome-card">
+            <h1>🚀 Welcome!</h1>
+            <p>Your website is up and running.</p>
+            <p>Start editing <code>public/index.html</code> to customize this page.</p>
+        </div>
+    </div>
+</body>
+</html>
+`,
+      'public/styles.css': `* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.container {
+    width: 100%;
+    max-width: 600px;
+}
+
+.welcome-card {
+    background: white;
+    border-radius: 16px;
+    padding: 40px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    text-align: center;
+}
+
+h1 {
+    color: #333;
+    margin-bottom: 20px;
+    font-size: 2.5rem;
+}
+
+p {
+    color: #666;
+    margin-bottom: 15px;
+    font-size: 1.1rem;
+    line-height: 1.6;
+}
+
+code {
+    background: #f4f4f4;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-family: 'Courier New', monospace;
+    color: #e83e8c;
+}
+`,
+      '.gitignore': `node_modules/
+.env
+.DS_Store
+*.log
+`
+    };
+
+    // Push each file to GitHub
+    for (const [filePath, content] of Object.entries(defaultFiles)) {
+      const contentBase64 = Buffer.from(content).toString('base64');
+      
+      try {
+        await githubAPI.put(`/repos/${repoOwner}/${repoName}/contents/${filePath}`, {
+          message: `Add default ${filePath}`,
+          content: contentBase64,
+          branch: branch
+        });
+        console.log(`[${new Date().toISOString()}] ✅ Pushed ${filePath}`);
+      } catch (error) {
+        // If file already exists (409), try to update it
+        if (error.response?.status === 409) {
+          // Get current file SHA first
+          try {
+            const getResponse = await githubAPI.get(`/repos/${repoOwner}/${repoName}/contents/${filePath}`, {
+              params: { ref: branch }
+            });
+            const sha = getResponse.data.sha;
+            
+            await githubAPI.put(`/repos/${repoOwner}/${repoName}/contents/${filePath}`, {
+              message: `Update default ${filePath}`,
+              content: contentBase64,
+              branch: branch,
+              sha: sha
+            });
+            console.log(`[${new Date().toISOString()}] ✅ Updated ${filePath}`);
+          } catch (updateError) {
+            console.warn(`[${new Date().toISOString()}] ⚠️ Could not update ${filePath}:`, updateError.message);
+          }
+        } else {
+          console.warn(`[${new Date().toISOString()}] ⚠️ Could not push ${filePath}:`, error.message);
+        }
+      }
+    }
+
+    console.log(`[${new Date().toISOString()}] ✅ Default files pushed successfully`);
+    return { success: true };
+  } catch (error) {
+    console.error(`[${new Date().toISOString()}] ❌ Error pushing default files:`, error.message);
+    throw new Error(`Failed to push default files: ${error.message}`);
+  }
+}
 async function createGitHubRepo(repoName, isPrivate = true) {
   try {
     if (!GITHUB_TOKEN) {
@@ -774,6 +971,7 @@ app.post('/api/create-website', requireAuth, async (req, res) => {
     console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 1: Creating GitHub repository: ${projectName}`);
     const githubResult = await createGitHubRepo(projectName, true);
     console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 1: ✅ GitHub repo created: ${githubResult.repoUrl}`);
+    
     
     // Step 2: Authenticate with CapRover ONCE
     const baseUrl = CAPROVER_URL.replace(/\/+$/, '');
