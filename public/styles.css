@@ -356,8 +356,40 @@ footer {
     color: var(--text-secondary);
 }
 
-.empty-state p {
-    margin-bottom: 16px;
+.modal-links {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 16px;
+}
+
+.modal-link-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    background: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    transition: all 0.2s;
+    font-size: 0.95rem;
+    width: fit-content;
+}
+
+.modal-link-btn:hover {
+    background: var(--primary-hover);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow);
+}
+
+.modal-link-btn::after {
+    content: '↗';
+    font-size: 1rem;
+    margin-left: 4px;
 }
 
 /* Modal Styles */

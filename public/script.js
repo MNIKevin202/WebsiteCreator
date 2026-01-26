@@ -622,14 +622,59 @@ function showErrorModal(title, message) {
     const modal = document.getElementById('errorModal');
     const modalTitle = document.getElementById('errorModalTitle');
     const modalMessage = document.getElementById('errorModalMessage');
+    const modalLinks = document.getElementById('errorModalLinks');
     
     modalTitle.textContent = title || 'Error';
     
+    // Extract URLs from message
+    const urlRegex = /(https?:\/\/[^\s\)]+)/g;
+    const urls = message.match(urlRegex) || [];
+    
     // Format message - if it's a string with newlines, preserve them
-    if (typeof message === 'string') {
-        modalMessage.innerHTML = `<pre>${escapeHtml(message)}</pre>`;
+    let formattedMessage = typeof message === 'string' ? message : JSON.stringify(message, null, 2);
+    
+    // Replace URLs with placeholders to avoid double rendering
+    const urlPlaceholders = [];
+    urls.forEach((url, index) => {
+        const placeholder = `__URL_PLACEHOLDER_${index}__`;
+        urlPlaceholders.push({ placeholder, url });
+        formattedMessage = formattedMessage.replace(url, placeholder);
+    });
+    
+    modalMessage.innerHTML = `<pre>${escapeHtml(formattedMessage)}</pre>`;
+    
+    // Create link buttons for URLs
+    if (urls.length > 0) {
+        modalLinks.innerHTML = '';
+        urls.forEach((url, index) => {
+            // Create a friendly label for common URLs
+            let label = url;
+            if (url.includes('github.com/settings/tokens')) {
+                label = 'Open GitHub Token Settings';
+            } else if (url.includes('github.com')) {
+                label = 'Open GitHub';
+            } else {
+                // Extract domain for display
+                try {
+                    const urlObj = new URL(url);
+                    label = `Open ${urlObj.hostname}`;
+                } catch (e) {
+                    label = 'Open Link';
+                }
+            }
+            
+            const linkBtn = document.createElement('a');
+            linkBtn.href = url;
+            linkBtn.target = '_blank';
+            linkBtn.rel = 'noopener noreferrer';
+            linkBtn.className = 'modal-link-btn';
+            linkBtn.textContent = label;
+            modalLinks.appendChild(linkBtn);
+        });
+        modalLinks.style.display = 'flex';
     } else {
-        modalMessage.innerHTML = `<pre>${escapeHtml(JSON.stringify(message, null, 2))}</pre>`;
+        modalLinks.style.display = 'none';
+        modalLinks.innerHTML = '';
     }
     
     modal.classList.add('show');
