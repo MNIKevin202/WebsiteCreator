@@ -160,9 +160,17 @@ async function bulkDeleteRepos() {
         return;
     }
     
-    if (!confirm(`Are you sure you want to delete ${selectedRepos.length} repository/repositories? This action cannot be undone.\n\nRepositories:\n${selectedRepos.join('\n')}`)) {
-        return;
-    }
+    showConfirmModal(
+        'Confirm Bulk Delete',
+        `Are you sure you want to delete ${selectedRepos.length} repository/repositories? This action cannot be undone.\n\nRepositories:\n${selectedRepos.join('\n')}`,
+        () => performBulkDeleteRepos(selectedRepos),
+        'Delete',
+        'danger'
+    );
+    return;
+}
+
+async function performBulkDeleteRepos(selectedRepos) {
     
     const bulkDeleteBtn = document.getElementById('bulkDeleteReposBtn');
     bulkDeleteBtn.disabled = true;
@@ -206,7 +214,7 @@ async function bulkDeleteRepos() {
         const errorMessage = `Deleted ${successCount} repository/repositories successfully.\n\nFailed to delete ${failCount}:\n${errors.join('\n')}`;
         showErrorModal('Bulk Delete Results', errorMessage);
     } else {
-        showErrorModal('Success', `Successfully deleted ${successCount} repository/repositories!`);
+        showToast(`Successfully deleted ${successCount} repository/repositories!`, 'success');
     }
     
     // Reload repos list
@@ -215,9 +223,16 @@ async function bulkDeleteRepos() {
 
 // Delete GitHub repository
 async function deleteRepo(repoName) {
-    if (!confirm(`Are you sure you want to delete the repository "${repoName}"? This action cannot be undone.`)) {
-        return;
-    }
+    showConfirmModal(
+        'Confirm Delete',
+        `Are you sure you want to delete the repository "${repoName}"? This action cannot be undone.`,
+        () => performDeleteRepo(repoName),
+        'Delete',
+        'danger'
+    );
+}
+
+async function performDeleteRepo(repoName) {
     
     const deleteBtn = document.getElementById(`delete-repo-${repoName}`);
     deleteBtn.disabled = true;
@@ -237,13 +252,14 @@ async function deleteRepo(repoName) {
         const data = await response.json();
         
         if (data.success) {
+            showToast(`Repository "${repoName}" deleted successfully`, 'success');
             // Reload repos list
             loadRepos();
         } else {
             throw new Error(data.error || 'Failed to delete repository');
         }
     } catch (error) {
-        alert(error.message || 'Failed to delete repository');
+        showToast(error.message || 'Failed to delete repository', 'error');
         deleteBtn.disabled = false;
         deleteBtn.textContent = 'Delete';
     }
@@ -351,9 +367,17 @@ async function bulkDeleteApps() {
         return;
     }
     
-    if (!confirm(`Are you sure you want to delete ${selectedApps.length} app/apps? This action cannot be undone.\n\nApps:\n${selectedApps.join('\n')}`)) {
-        return;
-    }
+    showConfirmModal(
+        'Confirm Bulk Delete',
+        `Are you sure you want to delete ${selectedApps.length} app/apps? This action cannot be undone.\n\nApps:\n${selectedApps.join('\n')}`,
+        () => performBulkDeleteApps(selectedApps),
+        'Delete',
+        'danger'
+    );
+    return;
+}
+
+async function performBulkDeleteApps(selectedApps) {
     
     const bulkDeleteBtn = document.getElementById('bulkDeleteAppsBtn');
     bulkDeleteBtn.disabled = true;
@@ -397,7 +421,7 @@ async function bulkDeleteApps() {
         const errorMessage = `Deleted ${successCount} app/apps successfully.\n\nFailed to delete ${failCount}:\n${errors.join('\n')}`;
         showErrorModal('Bulk Delete Results', errorMessage);
     } else {
-        showErrorModal('Success', `Successfully deleted ${successCount} app/apps!`);
+        showToast(`Successfully deleted ${successCount} app/apps!`, 'success');
     }
     
     // Reload apps list
@@ -406,9 +430,16 @@ async function bulkDeleteApps() {
 
 // Delete CapRover app
 async function deleteApp(appName) {
-    if (!confirm(`Are you sure you want to delete the CapRover app "${appName}"? This action cannot be undone.`)) {
-        return;
-    }
+    showConfirmModal(
+        'Confirm Delete',
+        `Are you sure you want to delete the CapRover app "${appName}"? This action cannot be undone.`,
+        () => performDeleteApp(appName),
+        'Delete',
+        'danger'
+    );
+}
+
+async function performDeleteApp(appName) {
     
     const deleteBtn = document.getElementById(`delete-app-${appName}`);
     deleteBtn.disabled = true;
@@ -428,13 +459,14 @@ async function deleteApp(appName) {
         const data = await response.json();
         
         if (data.success) {
+            showToast(`App "${appName}" deleted successfully`, 'success');
             // Reload apps list
             loadApps();
         } else {
             throw new Error(data.error || 'Failed to delete app');
         }
     } catch (error) {
-        showErrorModal('Delete App Error', error.message || 'Failed to delete app');
+        showToast(error.message || 'Failed to delete app', 'error');
         deleteBtn.disabled = false;
         deleteBtn.textContent = 'Delete';
     }
@@ -717,9 +749,14 @@ function escapeHtml(text) {
 
 // Close modal when clicking outside
 window.onclick = function(event) {
-    const modal = document.getElementById('errorModal');
-    if (event.target === modal) {
+    const errorModal = document.getElementById('errorModal');
+    const confirmModal = document.getElementById('confirmModal');
+    
+    if (event.target === errorModal) {
         closeErrorModal();
+    }
+    if (event.target === confirmModal) {
+        closeConfirmModal();
     }
 }
 
@@ -727,5 +764,6 @@ window.onclick = function(event) {
 document.addEventListener('keydown', function(event) {
     if (event.key === 'Escape') {
         closeErrorModal();
+        closeConfirmModal();
     }
 });
