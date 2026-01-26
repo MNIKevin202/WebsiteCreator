@@ -306,9 +306,10 @@ async function deleteGitHubRepo(repoName) {
 }
 
 // Push default starter files to GitHub repository
-async function pushDefaultFilesToGitHub(repoOwner, repoName, branch = 'main') {
+async function pushDefaultFilesToGitHub(repoOwner, repoName, branch = 'main', containerPort = 3000) {
   try {
-    console.log(`[${new Date().toISOString()}] Pushing default files to GitHub repo: ${repoOwner}/${repoName}`);
+    console.log(`[${new Date().toISOString()}] Pushing default files to GitHub repo: ${repoOwner}/${repoName} with port ${containerPort}`);
+    console.log(`[${new Date().toISOString()}] ⚠️ IMPORTANT: Files will use PORT=${containerPort} (this must match CapRover Container HTTP Port)`);
 
     // Default files to create
     const defaultFiles = {
@@ -316,7 +317,7 @@ async function pushDefaultFilesToGitHub(repoOwner, repoName, branch = 'main') {
 const path = require('path');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || ${containerPort};
 
 // Serve static files from public directory
 app.use(express.static(path.join(__dirname, 'public')));
@@ -373,7 +374,7 @@ RUN addgroup -g 1001 -S nodejs && \\
 USER nodejs
 
 # Expose port
-EXPOSE 3000
+EXPOSE ${containerPort}
 
 # Start the application
 CMD ["npm", "start"]
@@ -990,17 +991,7 @@ app.post('/api/create-website', requireAuth, async (req, res) => {
     const githubResult = await createGitHubRepo(projectName, true);
     console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 1: ✅ GitHub repo created: ${githubResult.repoUrl}`);
     
-    // Step 1b: Push default starter files to GitHub
-    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 1b: Pushing default starter files to GitHub...`);
-    try {
-      await pushDefaultFilesToGitHub(GITHUB_USERNAME, projectName, branch);
-      console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 1b: ✅ Default files pushed to GitHub`);
-    } catch (error) {
-      console.warn(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 1b: ⚠️ Could not push default files: ${error.message}. Continuing anyway...`);
-      // Continue even if file push fails - repo is created and CapRover can deploy empty repo
-    }
-    
-    // Step 2: Authenticate with CapRover ONCE
+    // Step 2: Authenticate with CapRover ONCE (needed to determine port)
     const baseUrl = CAPROVER_URL.replace(/\/+$/, '');
     console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 2: Authenticating with CapRover at ${baseUrl}...`);
     const token = await caproverLogin(baseUrl, CAPROVER_PASSWORD);
@@ -1021,6 +1012,17 @@ app.post('/api/create-website', requireAuth, async (req, res) => {
       const usedPorts = new Set(apps.map(app => app.containerHttpPort).filter(p => p && p > 0));
       containerPort = findNextAvailablePort(usedPorts, 3000);
       console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 3: Generated available port: ${containerPort} (used ports: ${Array.from(usedPorts).join(', ') || 'none'})`);
+    }
+    
+    // Step 3b: Push default starter files to GitHub (with correct port)
+    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 3b: Pushing default starter files to GitHub with port ${containerPort}...`);
+    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 3b: Files will use PORT=${containerPort} in server.js and EXPOSE ${containerPort} in Dockerfile`);
+    try {
+      await pushDefaultFilesToGitHub(GITHUB_USERNAME, projectName, branch, containerPort);
+      console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 3b: ✅ Default files pushed/updated to GitHub with port ${containerPort}`);
+    } catch (error) {
+      console.warn(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 3b: ⚠️ Could not push default files: ${error.message}. Continuing anyway...`);
+      // Continue even if file push fails - repo is created and CapRover can deploy empty repo
     }
     
     // Step 4: Ensure app exists (idempotent)
@@ -1053,26 +1055,28 @@ app.post('/api/create-website', requireAuth, async (req, res) => {
       templateEnvVarsData.forEach(env => {
         const key = env.key || env.name;
         const value = env.value;
-        if (key && value !== undefined) {
+        // Skip PORT - we'll set it explicitly based on containerPort
+        if (key && value !== undefined && key !== 'PORT') {
           envVars[key] = value;
         }
       });
-      console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 6a: ✅ Copied ${Object.keys(envVars).length} env vars from template app`);
+      console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 6a: ✅ Copied ${Object.keys(envVars).length} env vars from template app (excluding PORT)`);
     } else {
       console.warn(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 6a: ⚠️ Could not fetch template env vars: ${templateEnvCheck.message}. Using defaults.`);
     }
     
-    // Override with app-specific variables
+    // Override with app-specific variables (PORT must match containerPort)
     envVars.PORT = String(containerPort);
+    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 6b: Setting PORT=${containerPort} (must match Container HTTP Port)`);
     envVars.GITHUB_USERNAME = GITHUB_USERNAME;
     envVars.GITHUB_TOKEN = GITHUB_TOKEN;
     envVars.REPO_NAME = projectName;
     envVars.REPO_URL = githubResult.cloneUrl;
     envVars.REPO_BRANCH = branch;
     
-    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 6b: Applying ${Object.keys(envVars).length} env vars to new app...`);
+    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 6c: Applying ${Object.keys(envVars).length} env vars to new app...`);
     await caproverSetEnvVars(baseUrl, token, projectName, envVars);
-    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 6: ✅ Environment variables set (${Object.keys(envVars).length} total)`);
+    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 6: ✅ Environment variables set (${Object.keys(envVars).length} total, PORT=${containerPort})`);
     
     // Step 7: Verify env vars were applied
     console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 7: Verifying environment variables...`);
@@ -1090,6 +1094,15 @@ app.post('/api/create-website', requireAuth, async (req, res) => {
       const missingKeys = requiredKeys.filter(key => !envKeys.includes(key));
       if (missingKeys.length > 0) {
         throw new Error(`Environment variables not properly set. Missing: ${missingKeys.join(', ')}. Found keys: ${envKeys.join(', ')}`);
+      }
+      
+      // Verify PORT value matches containerPort
+      const portEnvVar = envVarsData.find(e => (e.key || e.name) === 'PORT');
+      const actualPort = portEnvVar?.value;
+      if (actualPort && actualPort !== String(containerPort)) {
+        console.warn(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 7: ⚠️ PORT env var mismatch! Expected: ${containerPort}, Found: ${actualPort}`);
+      } else if (actualPort) {
+        console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 7: ✅ PORT env var verified: ${actualPort} (matches Container HTTP Port)`);
       }
       console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 7: ✅ Environment variables verified (${envKeys.length} vars found)`);
     }

@@ -134,10 +134,28 @@ async function loadManage() {
         
         let html = '';
         
-        // Render matched pairs side by side
-        matched.forEach(({ repo, app, name }) => {
-            html += `
-                <div class="manage-item">
+        // Add column headers
+        html += `
+            <div class="manage-item" style="background: transparent; border: none; padding: 0 16px 8px;">
+                <div class="manage-column-header">Repositories</div>
+                <div class="manage-column-header">Matched Apps</div>
+                <div class="manage-column-header">All Apps</div>
+            </div>
+        `;
+        
+        // Sort apps alphabetically for consistent display
+        apps.sort((a, b) => a.appName.localeCompare(b.appName));
+        
+        // Get the maximum length to iterate (max of matched pairs or total apps)
+        const maxLength = Math.max(matched.length, apps.length);
+        
+        for (let i = 0; i < maxLength; i++) {
+            html += '<div class="manage-item">';
+            
+            // Column 1: Repo (if matched)
+            if (i < matched.length) {
+                const { repo } = matched[i];
+                html += `
                     <div class="manage-repo">
                         <div class="manage-repo-header">
                             <div class="manage-checkbox-wrapper">
@@ -152,23 +170,69 @@ async function loadManage() {
                             <a href="${repo.html_url}" target="_blank">${repo.html_url}</a>
                         </div>
                     </div>
+                `;
+            } else {
+                html += '<div class="manage-repo"></div>';
+            }
+            
+            // Column 2: Matched App (if matched)
+            if (i < matched.length) {
+                const { app } = matched[i];
+                html += `
                     <div class="manage-app">
                         <div class="manage-app-header">
                             <div class="manage-checkbox-wrapper">
                                 <input type="checkbox" class="app-checkbox" value="${app.appName}" onchange="updateSelectedManageCount()">
                                 <span class="manage-app-name">${escapeHtml(app.appName)}</span>
                             </div>
-                            <button onclick="deleteApp('${app.appName}')" class="btn-danger" id="delete-app-${app.appName}" style="width: auto; padding: 6px 12px; font-size: 0.85rem;">
-                                Delete
-                            </button>
+                            <div style="display: flex; gap: 4px; align-items: center; flex-wrap: wrap;">
+                                <a href="https://captain.kpanel.xyz/#/apps/details/${escapeHtml(app.appName)}" target="_blank" class="manage-app-link" title="Open in CapRover">
+                                    🔗 CapRover
+                                </a>
+                                <button onclick="deleteApp('${app.appName}')" class="btn-danger" id="delete-app-${app.appName}" style="width: auto; padding: 6px 12px; font-size: 0.85rem;">
+                                    Delete
+                                </button>
+                            </div>
                         </div>
                         <div class="manage-app-info">
                             Port: ${app.containerHttpPort || 'N/A'} | Instances: ${app.instanceCount || 1}
                         </div>
                     </div>
-                </div>
-            `;
-        });
+                `;
+            } else {
+                html += '<div class="manage-app"></div>';
+            }
+            
+            // Column 3: All Apps (show all apps)
+            if (i < apps.length) {
+                const app = apps[i];
+                html += `
+                    <div class="manage-app">
+                        <div class="manage-app-header">
+                            <div class="manage-checkbox-wrapper">
+                                <input type="checkbox" class="app-checkbox" value="${app.appName}" onchange="updateSelectedManageCount()">
+                                <span class="manage-app-name">${escapeHtml(app.appName)}</span>
+                            </div>
+                            <div style="display: flex; gap: 4px; align-items: center; flex-wrap: wrap;">
+                                <a href="https://captain.kpanel.xyz/#/apps/details/${escapeHtml(app.appName)}" target="_blank" class="manage-app-link" title="Open in CapRover">
+                                    🔗 CapRover
+                                </a>
+                                <button onclick="deleteApp('${app.appName}')" class="btn-danger" id="delete-app-all-${app.appName}" style="width: auto; padding: 6px 12px; font-size: 0.85rem;">
+                                    Delete
+                                </button>
+                            </div>
+                        </div>
+                        <div class="manage-app-info">
+                            Port: ${app.containerHttpPort || 'N/A'} | Instances: ${app.instanceCount || 1}
+                        </div>
+                    </div>
+                `;
+            } else {
+                html += '<div class="manage-app"></div>';
+            }
+            
+            html += '</div>';
+        }
         
         // Render unmatched repos (full width)
         unmatchedRepos.forEach(repo => {
@@ -186,28 +250,6 @@ async function loadManage() {
                         </div>
                         <div class="manage-repo-url">
                             <a href="${repo.html_url}" target="_blank">${repo.html_url}</a>
-                        </div>
-                    </div>
-                </div>
-            `;
-        });
-        
-        // Render unmatched apps (full width)
-        unmatchedApps.forEach(app => {
-            html += `
-                <div class="manage-item manage-item-single">
-                    <div class="manage-app">
-                        <div class="manage-app-header">
-                            <div class="manage-checkbox-wrapper">
-                                <input type="checkbox" class="app-checkbox" value="${app.appName}" onchange="updateSelectedManageCount()">
-                                <span class="manage-app-name">${escapeHtml(app.appName)}</span>
-                            </div>
-                            <button onclick="deleteApp('${app.appName}')" class="btn-danger" id="delete-app-${app.appName}" style="width: auto; padding: 6px 12px; font-size: 0.85rem;">
-                                Delete
-                            </button>
-                        </div>
-                        <div class="manage-app-info">
-                            Port: ${app.containerHttpPort || 'N/A'} | Instances: ${app.instanceCount || 1}
                         </div>
                     </div>
                 </div>

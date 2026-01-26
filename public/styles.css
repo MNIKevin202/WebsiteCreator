@@ -760,7 +760,7 @@ footer {
 
 .manage-item {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr 1fr 1fr;
     gap: 16px;
     padding: 16px;
     background: var(--bg-color);
@@ -779,6 +779,10 @@ footer {
     grid-column: 1 / -1;
 }
 
+.manage-item-double {
+    grid-column: span 2;
+}
+
 .manage-repo,
 .manage-app {
     display: flex;
@@ -792,6 +796,8 @@ footer {
     justify-content: space-between;
     align-items: center;
     margin-bottom: 8px;
+    gap: 8px;
+    flex-wrap: wrap;
 }
 
 .manage-repo-name,
@@ -818,6 +824,38 @@ footer {
     color: var(--primary-hover);
 }
 
+.manage-app-link {
+    color: var(--info-color);
+    text-decoration: none;
+    font-size: 0.85rem;
+    padding: 4px 8px;
+    border-radius: 6px;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+    border: 1px solid var(--border-color);
+}
+
+.manage-app-link:hover {
+    background: var(--bg-secondary);
+    color: var(--primary-hover);
+    border-color: var(--border-hover);
+    text-decoration: none;
+}
+
+.manage-column-header {
+    font-weight: 600;
+    color: var(--text-primary);
+    font-size: 0.9rem;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--border-color);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
 .manage-checkbox-wrapper {
     display: flex;
     align-items: center;
@@ -829,6 +867,16 @@ footer {
     height: 18px;
     cursor: pointer;
     accent-color: var(--primary-color);
+}
+
+@media (max-width: 1200px) {
+    .manage-item {
+        grid-template-columns: 1fr 1fr;
+    }
+    
+    .manage-item .manage-app:last-child {
+        grid-column: 1 / -1;
+    }
 }
 
 @media (max-width: 768px) {
