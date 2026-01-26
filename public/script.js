@@ -935,6 +935,9 @@ form.addEventListener('submit', async (e) => {
                 <div class="result-item">
                     <strong>CapRover App:</strong>
                     <span>${data.data.caproverApp}</span>
+                    <a href="https://captain.kpanel.xyz/#/apps/details/${escapeHtml(data.data.caproverApp)}" target="_blank" class="modal-link-btn" style="margin-left: 12px; padding: 6px 12px; font-size: 0.85rem;">
+                        Open in CapRover
+                    </a>
                 </div>
                 <div class="result-item">
                     <strong>Container Port:</strong>
