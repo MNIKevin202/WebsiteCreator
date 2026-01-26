@@ -16,9 +16,24 @@ if (process.env.NODE_ENV !== 'production') {
 const app = express();
 const PORT = process.env.PORT || 3117;
 
+// Request logging middleware
+app.use((req, res, next) => {
+  const timestamp = new Date().toISOString();
+  console.log(`[${timestamp}] ${req.method} ${req.url} - IP: ${req.ip || req.connection.remoteAddress}`);
+  console.log(`[${timestamp}] Headers:`, JSON.stringify(req.headers, null, 2));
+  next();
+});
+
 app.use(cors());
 app.use(bodyParser.json());
 app.use(express.static('public'));
+
+// Log static file serving
+app.use(express.static('public', {
+  setHeaders: (res, path) => {
+    console.log(`[${new Date().toISOString()}] Serving static file: ${path}`);
+  }
+}));
 
 // Configuration from environment variables (set in CapRover App Configs)
 // These are read directly from CapRover's environment variables
@@ -250,24 +265,28 @@ app.post('/api/create-website', async (req, res) => {
     }
     
     // Step 1: Create GitHub repository
-    console.log(`Creating GitHub repository: ${projectName}`);
+    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 1: Creating GitHub repository: ${projectName}`);
     const githubResult = await createGitHubRepo(projectName, true);
+    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 1: GitHub repo created: ${githubResult.repoUrl}`);
     
     // Step 2: Authenticate with CapRover
-    console.log('Authenticating with CapRover...');
+    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 2: Authenticating with CapRover at ${CAPROVER_URL}...`);
     const authToken = await getCapRoverAuthToken();
+    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 2: CapRover authentication successful`);
     
     // Step 3: Get used ports and find available port
-    console.log('Finding available port...');
+    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 3: Finding available port...`);
     const usedPorts = await getUsedPorts(authToken);
     const availablePort = findNextAvailablePort(usedPorts);
+    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 3: Available port found: ${availablePort} (used ports: ${Array.from(usedPorts).join(', ') || 'none'})`);
     
     // Step 4: Create CapRover app
-    console.log(`Creating CapRover app: ${projectName}`);
+    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 4: Creating CapRover app: ${projectName}`);
     await createCapRoverApp(projectName, authToken);
+    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 4: CapRover app created successfully`);
     
     // Step 5: Configure GitHub deployment and set container HTTP port
-    console.log(`Configuring GitHub deployment and setting container HTTP port to ${availablePort}...`);
+    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 5: Configuring GitHub deployment and setting container HTTP port to ${availablePort}...`);
     await configureCapRoverApp(
       projectName,
       githubResult.cloneUrl,
@@ -277,7 +296,9 @@ app.post('/api/create-website', async (req, res) => {
       availablePort,
       authToken
     );
+    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 5: Configuration completed successfully`);
     
+    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] ✅ All steps completed successfully!`);
     res.json({
       success: true,
       message: 'Website created successfully!',
@@ -290,7 +311,8 @@ app.post('/api/create-website', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('Error creating website:', error);
+    console.error(`[${new Date().toISOString()}] [REQUEST ${requestId}] ❌ Error creating website:`, error);
+    console.error(`[${new Date().toISOString()}] [REQUEST ${requestId}] Error stack:`, error.stack);
     res.status(500).json({
       success: false,
       error: error.message || 'Failed to create website'
@@ -300,28 +322,68 @@ app.post('/api/create-website', async (req, res) => {
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
-  res.json({ 
+  console.log(`[${new Date().toISOString()}] Health check requested`);
+  const healthData = {
     status: 'ok',
     port: PORT,
     timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    memory: {
+      used: Math.round(process.memoryUsage().heapUsed / 1024 / 1024) + ' MB',
+      total: Math.round(process.memoryUsage().heapTotal / 1024 / 1024) + ' MB'
+    },
     env: {
       hasGithubToken: !!GITHUB_TOKEN,
       hasCaproverUrl: !!CAPROVER_URL,
-      hasCaproverPassword: !!CAPROVER_PASSWORD
+      hasCaproverPassword: !!CAPROVER_PASSWORD,
+      nodeEnv: process.env.NODE_ENV || 'not set',
+      portFromEnv: process.env.PORT || 'not set (using default 3117)'
+    },
+    server: {
+      listening: true,
+      address: '0.0.0.0',
+      port: PORT
     }
-  });
+  };
+  console.log(`[${new Date().toISOString()}] Health check response:`, JSON.stringify(healthData, null, 2));
+  res.json(healthData);
 });
 
 // Root endpoint
 app.get('/', (req, res) => {
-  res.sendFile(__dirname + '/public/index.html');
+  console.log(`[${new Date().toISOString()}] Root endpoint requested, serving index.html`);
+  const indexPath = __dirname + '/public/index.html';
+  console.log(`[${new Date().toISOString()}] Index file path: ${indexPath}`);
+  res.sendFile(indexPath, (err) => {
+    if (err) {
+      console.error(`[${new Date().toISOString()}] Error serving index.html:`, err);
+      res.status(500).send('Error loading page');
+    } else {
+      console.log(`[${new Date().toISOString()}] Successfully served index.html`);
+    }
+  });
 });
 
-app.listen(PORT, '0.0.0.0', () => {
+// Catch-all for undefined routes
+app.use((req, res) => {
+  console.log(`[${new Date().toISOString()}] 404 - Route not found: ${req.method} ${req.url}`);
+  res.status(404).json({ error: 'Route not found', path: req.url, method: req.method });
+});
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error(`[${new Date().toISOString()}] Unhandled error:`, err);
+  console.error(`[${new Date().toISOString()}] Error stack:`, err.stack);
+  res.status(500).json({ error: 'Internal server error', message: err.message });
+});
+
+const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`═══════════════════════════════════════════════════════`);
   console.log(`🚀 Server is running!`);
   console.log(`   Port: ${PORT}`);
   console.log(`   Listening on: 0.0.0.0:${PORT}`);
+  console.log(`   Server address: ${server.address().address}:${server.address().port}`);
+  console.log(`   Process ID: ${process.pid}`);
   console.log(`═══════════════════════════════════════════════════════`);
   console.log(`📋 IMPORTANT: Set Container HTTP Port in CapRover!`);
   console.log(`   1. Go to CapRover Dashboard → websitecreator app`);
@@ -337,6 +399,15 @@ app.listen(PORT, '0.0.0.0', () => {
   if (!CAPROVER_URL) missingVars.push('CAPROVER_URL');
   if (!CAPROVER_PASSWORD) missingVars.push('CAPROVER_PASSWORD');
   
+  console.log(`📦 Environment Variables:`);
+  console.log(`   GITHUB_TOKEN: ${GITHUB_TOKEN ? '✅ Set (' + GITHUB_TOKEN.substring(0, 10) + '...)' : '❌ Missing'}`);
+  console.log(`   CAPROVER_URL: ${CAPROVER_URL || '❌ Missing'}`);
+  console.log(`   CAPROVER_PASSWORD: ${CAPROVER_PASSWORD ? '✅ Set' : '❌ Missing'}`);
+  console.log(`   GITHUB_USERNAME: ${GITHUB_USERNAME || '⚠️  Not set (optional)'}`);
+  console.log(`   GITHUB_PASSWORD: ${GITHUB_PASSWORD ? '✅ Set' : '⚠️  Not set (optional)'}`);
+  console.log(`   NODE_ENV: ${process.env.NODE_ENV || 'not set'}`);
+  console.log(`   PORT (from env): ${process.env.PORT || 'not set (using default 3117)'}`);
+  
   if (missingVars.length > 0) {
     console.warn(`⚠️  Warning: Missing required environment variables: ${missingVars.join(', ')}`);
     console.warn(`   Set these in CapRover: App Configs → Environment Variables`);
@@ -344,4 +415,23 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log(`✅ All required environment variables are set`);
   }
   console.log(`═══════════════════════════════════════════════════════`);
+  console.log(`📡 Server is ready to accept connections`);
+  console.log(`   Health check: http://0.0.0.0:${PORT}/api/health`);
+  console.log(`═══════════════════════════════════════════════════════`);
+});
+
+// Log server errors
+server.on('error', (err) => {
+  console.error(`[${new Date().toISOString()}] Server error:`, err);
+  if (err.code === 'EADDRINUSE') {
+    console.error(`[${new Date().toISOString()}] Port ${PORT} is already in use!`);
+  }
+});
+
+// Log connection events
+server.on('connection', (socket) => {
+  console.log(`[${new Date().toISOString()}] New connection from ${socket.remoteAddress}:${socket.remotePort}`);
+  socket.on('close', () => {
+    console.log(`[${new Date().toISOString()}] Connection closed: ${socket.remoteAddress}:${socket.remotePort}`);
+  });
 });
