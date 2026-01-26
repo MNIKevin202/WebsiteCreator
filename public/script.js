@@ -965,10 +965,30 @@ form.addEventListener('submit', async (e) => {
                             Open Hostinger DNS Settings
                         </button>
                         <div style="margin-top: 12px; padding: 12px; background: var(--bg-color); border-radius: 8px; width: 100%; border: 1px solid var(--border-color);">
-                            <strong style="color: var(--text-primary); font-size: 0.9rem; display: block; margin-bottom: 8px;">⚡ Auto-Fill:</strong>
+                            <strong style="color: var(--text-primary); font-size: 0.9rem; display: block; margin-bottom: 8px;">⚡ Auto-Fill Script:</strong>
                             <p style="margin: 0 0 8px 0; color: var(--text-secondary); font-size: 0.85rem;">
-                                Click "Auto-Fill DNS Fields" button in the Hostinger window to automatically fill the form fields.
+                                After opening Hostinger DNS page, copy and paste this script into the browser console (F12) to auto-fill the fields:
                             </p>
+                            <pre id="hostingerScript-${escapeHtml(formData.domain)}" style="background: var(--card-bg); padding: 10px; border-radius: 6px; overflow-x: auto; font-size: 0.8rem; margin: 0; border: 1px solid var(--border-color); cursor: pointer; user-select: all;" onclick="copyHostingerScript('hostingerScript-${escapeHtml(formData.domain)}')" title="Click to copy">(function() {
+    const pointsToField = document.getElementById('hdomains_dns_create_record_pointsTo');
+    const ttlField = document.getElementById('hdomains_dns_create_record_ttl');
+    if (pointsToField) {
+        pointsToField.value = '46.202.178.170';
+        pointsToField.dispatchEvent(new Event('input', { bubbles: true }));
+        pointsToField.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    if (ttlField) {
+        ttlField.value = '60';
+        ttlField.dispatchEvent(new Event('input', { bubbles: true }));
+        ttlField.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    if (pointsToField && ttlField) {
+        alert('Fields filled! Type: A, Name: @, Points to: 46.202.178.170, TTL: 60');
+    } else {
+        alert('Fields not found. Make sure you are on the DNS records page.');
+    }
+})();</pre>
+                            <small style="color: var(--text-muted); margin-top: 4px; display: block;">Click the code block above to copy the script, then paste it into the browser console (F12) on the Hostinger page</small>
                         </div>
                     </div>
                 `;
