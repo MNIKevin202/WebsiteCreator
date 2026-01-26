@@ -19,7 +19,7 @@ RUN addgroup -g 1001 -S nodejs && \
 USER nodejs
 
 # Expose port (will be overridden by CapRover)
-EXPOSE 3117
+EXPOSE 3800
 
 # Start the application
 CMD ["npm", "start"]

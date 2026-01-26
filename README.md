@@ -90,7 +90,7 @@ For development with auto-reload:
 npm run dev
 ```
 
-2. Open your browser and navigate to `http://localhost:3117`
+2. Open your browser and navigate to `http://localhost:3800`
 
 3. Fill in the form:
    - **Project Name**: The name for your project (will be used for both GitHub repo and CapRover app)
@@ -152,7 +152,7 @@ Health check endpoint.
 | `CAPROVER_PASSWORD` | CapRover admin password | Yes |
 | `GITHUB_USERNAME` | GitHub username (can also be provided in form) | Optional |
 | `GITHUB_PASSWORD` | GitHub token/password (can also be provided in form) | Optional |
-| `PORT` | Server port (default: 3117) | No |
+| `PORT` | Server port (default: 3800) | No |
 
 ## Security Notes
 

@@ -14,7 +14,7 @@ if (process.env.NODE_ENV !== 'production') {
 }
 
 const app = express();
-const PORT = process.env.PORT || 3117;
+const PORT = process.env.PORT || 3800;
 
 // Request logging middleware
 app.use((req, res, next) => {
@@ -375,7 +375,7 @@ app.get('/api/health', (req, res) => {
       hasCaproverUrl: !!CAPROVER_URL,
       hasCaproverPassword: !!CAPROVER_PASSWORD,
       nodeEnv: process.env.NODE_ENV || 'not set',
-      portFromEnv: process.env.PORT || 'not set (using default 3117)'
+      portFromEnv: process.env.PORT || 'not set (using default 3800)'
     },
     server: {
       listening: true,
@@ -444,7 +444,7 @@ const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`   GITHUB_USERNAME: ${GITHUB_USERNAME || '⚠️  Not set (optional)'}`);
   console.log(`   GITHUB_PASSWORD: ${GITHUB_PASSWORD ? '✅ Set' : '⚠️  Not set (optional)'}`);
   console.log(`   NODE_ENV: ${process.env.NODE_ENV || 'not set'}`);
-  console.log(`   PORT (from env): ${process.env.PORT || 'not set (using default 3117)'}`);
+  console.log(`   PORT (from env): ${process.env.PORT || 'not set (using default 3800)'}`);
   
   if (missingVars.length > 0) {
     console.warn(`⚠️  Warning: Missing required environment variables: ${missingVars.join(', ')}`);
