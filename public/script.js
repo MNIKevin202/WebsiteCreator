@@ -244,14 +244,10 @@ function updateSelectedManageCount() {
     const selectedRepos = Array.from(repoCheckboxes).filter(cb => cb.checked);
     const selectedApps = Array.from(appCheckboxes).filter(cb => cb.checked);
     
-    const reposCount = selectedRepos.length;
-    const appsCount = selectedApps.length;
+    const totalSelected = selectedRepos.length + selectedApps.length;
     
-    document.getElementById('selectedReposCount').textContent = reposCount;
-    document.getElementById('selectedAppsCount').textContent = appsCount;
-    
-    document.getElementById('bulkDeleteReposBtn').disabled = reposCount === 0;
-    document.getElementById('bulkDeleteAppsBtn').disabled = appsCount === 0;
+    document.getElementById('selectedTotalCount').textContent = totalSelected;
+    document.getElementById('bulkDeleteAllBtn').disabled = totalSelected === 0;
     
     // Update select all checkbox state
     const selectAll = document.getElementById('selectAllManage');
@@ -260,10 +256,134 @@ function updateSelectedManageCount() {
         selectAll.checked = false;
         selectAll.indeterminate = false;
     } else {
-        const totalSelected = reposCount + appsCount;
         selectAll.checked = totalSelected === totalCheckboxes;
         selectAll.indeterminate = totalSelected > 0 && totalSelected < totalCheckboxes;
     }
+}
+
+// Bulk delete all selected (repos and apps)
+async function bulkDeleteAll() {
+    const repoCheckboxes = document.querySelectorAll('.repo-checkbox:checked');
+    const appCheckboxes = document.querySelectorAll('.app-checkbox:checked');
+    
+    const selectedRepos = Array.from(repoCheckboxes).map(cb => cb.value);
+    const selectedApps = Array.from(appCheckboxes).map(cb => cb.value);
+    
+    const totalSelected = selectedRepos.length + selectedApps.length;
+    
+    if (totalSelected === 0) {
+        return;
+    }
+    
+    let message = `Are you sure you want to delete ${totalSelected} item(s)? This action cannot be undone.\n\n`;
+    if (selectedRepos.length > 0) {
+        message += `Repositories (${selectedRepos.length}):\n${selectedRepos.join('\n')}\n\n`;
+    }
+    if (selectedApps.length > 0) {
+        message += `Apps (${selectedApps.length}):\n${selectedApps.join('\n')}`;
+    }
+    
+    showConfirmModal(
+        'Confirm Bulk Delete',
+        message,
+        () => performBulkDeleteAll(selectedRepos, selectedApps),
+        'Delete',
+        'danger'
+    );
+}
+
+async function performBulkDeleteAll(selectedRepos, selectedApps) {
+    const bulkDeleteBtn = document.getElementById('bulkDeleteAllBtn');
+    const totalItems = selectedRepos.length + selectedApps.length;
+    let currentItem = 0;
+    
+    bulkDeleteBtn.disabled = true;
+    bulkDeleteBtn.textContent = `Deleting... (0/${totalItems})`;
+    
+    let reposSuccessCount = 0;
+    let reposFailCount = 0;
+    let appsSuccessCount = 0;
+    let appsFailCount = 0;
+    const errors = [];
+    
+    // Delete repos first
+    for (let i = 0; i < selectedRepos.length; i++) {
+        const repoName = selectedRepos[i];
+        currentItem++;
+        bulkDeleteBtn.textContent = `Deleting... (${currentItem}/${totalItems})`;
+        
+        try {
+            const response = await fetch(`/api/repos/${encodeURIComponent(repoName)}`, {
+                method: 'DELETE',
+                credentials: 'include'
+            });
+            
+            if (response.status === 401) {
+                showLogin();
+                return;
+            }
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                reposSuccessCount++;
+            } else {
+                reposFailCount++;
+                errors.push(`Repo ${repoName}: ${data.error || 'Failed to delete'}`);
+            }
+        } catch (error) {
+            reposFailCount++;
+            errors.push(`Repo ${repoName}: ${error.message || 'Failed to delete'}`);
+        }
+    }
+    
+    // Delete apps
+    for (let i = 0; i < selectedApps.length; i++) {
+        const appName = selectedApps[i];
+        currentItem++;
+        bulkDeleteBtn.textContent = `Deleting... (${currentItem}/${totalItems})`;
+        
+        try {
+            const response = await fetch(`/api/apps/${encodeURIComponent(appName)}`, {
+                method: 'DELETE',
+                credentials: 'include'
+            });
+            
+            if (response.status === 401) {
+                showLogin();
+                return;
+            }
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                appsSuccessCount++;
+            } else {
+                appsFailCount++;
+                errors.push(`App ${appName}: ${data.error || 'Failed to delete'}`);
+            }
+        } catch (error) {
+            appsFailCount++;
+            errors.push(`App ${appName}: ${error.message || 'Failed to delete'}`);
+        }
+    }
+    
+    // Show results
+    const totalSuccess = reposSuccessCount + appsSuccessCount;
+    const totalFail = reposFailCount + appsFailCount;
+    
+    if (totalFail > 0) {
+        let errorMessage = `Deleted ${totalSuccess} item(s) successfully.\n\n`;
+        if (reposSuccessCount > 0) errorMessage += `Repositories: ${reposSuccessCount}\n`;
+        if (appsSuccessCount > 0) errorMessage += `Apps: ${appsSuccessCount}\n\n`;
+        errorMessage += `Failed to delete ${totalFail}:\n${errors.join('\n')}`;
+        showErrorModal('Bulk Delete Results', errorMessage);
+    } else {
+        showToast(`Successfully deleted ${totalSuccess} item(s)!`, 'success');
+    }
+    
+    // Reload manage list
+    loadManage();
 }
 
 // Load GitHub repositories

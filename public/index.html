@@ -157,14 +157,9 @@
                                 <input type="checkbox" id="selectAllManage" onchange="toggleSelectAllManage()">
                                 <span>Select All</span>
                             </label>
-                            <div style="display: flex; gap: 8px;">
-                                <button onclick="bulkDeleteRepos()" id="bulkDeleteReposBtn" class="btn-danger" disabled>
-                                    Delete Selected Repos (<span id="selectedReposCount">0</span>)
-                                </button>
-                                <button onclick="bulkDeleteApps()" id="bulkDeleteAppsBtn" class="btn-danger" disabled>
-                                    Delete Selected Apps (<span id="selectedAppsCount">0</span>)
-                                </button>
-                            </div>
+                            <button onclick="bulkDeleteAll()" id="bulkDeleteAllBtn" class="btn-danger" disabled>
+                                Delete Selected (<span id="selectedTotalCount">0</span>)
+                            </button>
                         </div>
                         <div id="manageContent"></div>
                     </div>
