@@ -928,10 +928,21 @@ form.addEventListener('submit', async (e) => {
         
         if (data.success) {
             // Show success result
+            const githubRepoUrl = data.data.githubRepo;
+            const webhookUrl = githubRepoUrl + '/settings/hooks';
             let resultHtml = `
-                <div class="result-item">
+                <div class="result-item" style="flex-direction: column; align-items: flex-start; gap: 8px;">
                     <strong>GitHub Repo:</strong>
-                    <a href="${data.data.githubRepo}" target="_blank">${data.data.githubRepo}</a>
+                    <div style="display: flex; align-items: center; gap: 8px; width: 100%;">
+                        <a href="${githubRepoUrl}" target="_blank" style="flex: 1; color: var(--primary-color); text-decoration: none; word-break: break-all;">${githubRepoUrl}</a>
+                        <button onclick="copyToClipboard('${githubRepoUrl}', this)" class="btn-secondary" style="width: auto; padding: 8px 16px; font-size: 0.85rem; flex-shrink: 0;">
+                            📋 Copy
+                        </button>
+                    </div>
+                </div>
+                <div class="result-item" style="flex-direction: column; align-items: flex-start; gap: 8px;">
+                    <strong>Webhook Settings:</strong>
+                    <a href="${webhookUrl}" target="_blank" style="color: var(--primary-color); text-decoration: none; word-break: break-all;">${webhookUrl}</a>
                 </div>
                 <div class="result-item">
                     <strong>CapRover App:</strong>
