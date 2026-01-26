@@ -139,33 +139,66 @@ input[type="number"]::placeholder {
 /* Port input group styling */
 .port-input-group {
     display: flex;
-    gap: 12px;
+    gap: 10px;
     align-items: stretch;
 }
 
 .port-input-group input[type="number"] {
     flex: 1;
     min-width: 0;
+    padding: 14px 18px;
+    border: 2px solid var(--border-color);
+    border-radius: 12px;
+    font-size: 1rem;
+    transition: all 0.2s;
+    font-family: inherit;
+    background: var(--bg-color);
+    color: var(--text-primary);
+}
+
+.port-input-group input[type="number"]:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.2);
+    background: var(--bg-secondary);
+}
+
+.port-input-group input[type="number"]::placeholder {
+    color: var(--text-muted);
 }
 
 .btn-generate-port {
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: 8px;
     padding: 14px 20px;
     white-space: nowrap;
     font-weight: 600;
     transition: all 0.2s;
     border-radius: 12px;
+    background: var(--bg-secondary);
+    border: 2px solid var(--border-color);
+    color: var(--text-primary);
+    cursor: pointer;
+    font-size: 0.95rem;
 }
 
-.btn-generate-port:hover {
+.btn-generate-port:hover:not(:disabled) {
+    background: var(--bg-color);
+    border-color: var(--primary-color);
     transform: translateY(-1px);
-    box-shadow: var(--shadow);
+    box-shadow: 0 4px 6px -1px rgba(99, 102, 241, 0.2);
+}
+
+.btn-generate-port:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 
 .btn-generate-port span:first-child {
     font-size: 1.1rem;
+    line-height: 1;
 }
 
 small {

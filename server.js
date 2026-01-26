@@ -212,12 +212,30 @@ async function getUsedPorts(authToken) {
   }
 }
 
-// Find next available port
+// Find a random available port
 function findNextAvailablePort(usedPorts, startPort = 3000) {
-  let port = startPort;
-  while (usedPorts.has(port)) {
+  const minPort = startPort;
+  const maxPort = 65535;
+  const maxAttempts = 1000; // Prevent infinite loops
+  
+  // Try random ports first
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const randomPort = Math.floor(Math.random() * (maxPort - minPort + 1)) + minPort;
+    if (!usedPorts.has(randomPort)) {
+      return randomPort;
+    }
+  }
+  
+  // Fallback to sequential if random fails (unlikely)
+  let port = minPort;
+  while (usedPorts.has(port) && port <= maxPort) {
     port++;
   }
+  
+  if (port > maxPort) {
+    throw new Error('No available ports found in range 3000-65535');
+  }
+  
   return port;
 }
 
