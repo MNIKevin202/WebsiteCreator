@@ -19,8 +19,16 @@ const PORT = process.env.PORT || 3117;
 // Request logging middleware
 app.use((req, res, next) => {
   const timestamp = new Date().toISOString();
-  console.log(`[${timestamp}] ${req.method} ${req.url} - IP: ${req.ip || req.connection.remoteAddress}`);
-  console.log(`[${timestamp}] Headers:`, JSON.stringify(req.headers, null, 2));
+  console.log(`[${timestamp}] ═══════════════════════════════════════════════════════`);
+  console.log(`[${timestamp}] 📥 INCOMING REQUEST`);
+  console.log(`[${timestamp}] Method: ${req.method}`);
+  console.log(`[${timestamp}] URL: ${req.url}`);
+  console.log(`[${timestamp}] IP: ${req.ip || req.connection.remoteAddress || req.headers['x-forwarded-for'] || 'unknown'}`);
+  console.log(`[${timestamp}] Host: ${req.headers.host || 'not set'}`);
+  console.log(`[${timestamp}] X-Forwarded-For: ${req.headers['x-forwarded-for'] || 'not set'}`);
+  console.log(`[${timestamp}] X-Real-IP: ${req.headers['x-real-ip'] || 'not set'}`);
+  console.log(`[${timestamp}] User-Agent: ${req.headers['user-agent'] || 'not set'}`);
+  console.log(`[${timestamp}] ═══════════════════════════════════════════════════════`);
   next();
 });
 
@@ -318,6 +326,36 @@ app.post('/api/create-website', async (req, res) => {
       error: error.message || 'Failed to create website'
     });
   }
+});
+
+// Test endpoint to verify routing is working
+app.get('/test', (req, res) => {
+  console.log(`[${new Date().toISOString()}] Test endpoint hit!`);
+  res.json({
+    success: true,
+    message: 'Server is reachable!',
+    timestamp: new Date().toISOString(),
+    port: PORT,
+    serverAddress: server.address(),
+    headers: req.headers
+  });
+});
+
+// Test endpoint to verify routing is working
+app.get('/test', (req, res) => {
+  console.log(`[${new Date().toISOString()}] ✅ Test endpoint hit! Routing is working!`);
+  res.json({
+    success: true,
+    message: 'Server is reachable! Routing is working correctly.',
+    timestamp: new Date().toISOString(),
+    port: PORT,
+    serverAddress: server.address(),
+    requestHeaders: {
+      host: req.headers.host,
+      'x-forwarded-for': req.headers['x-forwarded-for'],
+      'x-real-ip': req.headers['x-real-ip']
+    }
+  });
 });
 
 // Health check endpoint
