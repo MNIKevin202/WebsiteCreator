@@ -171,8 +171,8 @@ input[type="number"]::placeholder {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 8px;
-    padding: 14px 20px;
+    gap: 6px;
+    padding: 12px 16px;
     white-space: nowrap;
     font-weight: 600;
     transition: all 0.2s;
@@ -181,8 +181,9 @@ input[type="number"]::placeholder {
     border: 2px solid var(--border-color);
     color: var(--text-primary);
     cursor: pointer;
-    font-size: 0.95rem;
+    font-size: 0.9rem;
     flex-shrink: 0;
+    min-width: auto;
 }
 
 .btn-generate-port:hover:not(:disabled) {
