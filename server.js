@@ -140,10 +140,18 @@ async function getCapRoverAuthToken() {
     const response = await caproverAPI.post('/login', {
       password: CAPROVER_PASSWORD
     });
-    return response.data.token;
+    
+    const token = response.data.token;
+    console.log(`[${new Date().toISOString()}] ✅ CapRover authentication successful. Token length: ${token ? token.length : 0}, Token preview: ${token ? token.substring(0, 20) + '...' : 'null'}`);
+    
+    if (!token) {
+      throw new Error('CapRover authentication succeeded but no token was returned');
+    }
+    
+    return token;
   } catch (error) {
     const errorMsg = error.response 
-      ? `CapRover API returned ${error.response.status}: ${error.response.statusText}. URL: ${error.config?.url || 'unknown'}`
+      ? `CapRover API returned ${error.response.status}: ${error.response.statusText}. URL: ${error.config?.url || 'unknown'}. Response: ${JSON.stringify(error.response.data)}`
       : error.message;
     console.error(`[${new Date().toISOString()}] CapRover authentication error:`, errorMsg);
     throw new Error(`Failed to authenticate with CapRover: ${errorMsg}`);
