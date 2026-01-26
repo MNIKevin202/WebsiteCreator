@@ -141,11 +141,12 @@ input[type="number"]::placeholder {
     display: flex;
     gap: 10px;
     align-items: stretch;
+    width: 100%;
 }
 
 .port-input-group input[type="number"] {
-    flex: 2;
-    min-width: 200px;
+    flex: 1;
+    min-width: 0;
     padding: 14px 18px;
     border: 2px solid var(--border-color);
     border-radius: 12px;
@@ -172,7 +173,7 @@ input[type="number"]::placeholder {
     align-items: center;
     justify-content: center;
     gap: 4px;
-    padding: 10px 12px;
+    padding: 10px 16px;
     white-space: nowrap;
     font-weight: 600;
     transition: all 0.2s;
@@ -184,6 +185,8 @@ input[type="number"]::placeholder {
     font-size: 0.85rem;
     flex-shrink: 0;
     min-width: auto;
+    width: auto;
+    max-width: fit-content;
 }
 
 .btn-generate-port:hover:not(:disabled) {
@@ -201,6 +204,12 @@ input[type="number"]::placeholder {
 .btn-generate-port span:first-child {
     font-size: 1.1rem;
     line-height: 1;
+}
+
+.btn-secondary.btn-generate-port {
+    width: auto;
+    margin-top: 0;
+    padding: 10px 16px;
 }
 
 small {
