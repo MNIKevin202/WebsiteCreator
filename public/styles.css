@@ -768,6 +768,7 @@ footer {
     margin-bottom: 12px;
     border: 1px solid var(--border-color);
     transition: all 0.2s;
+    align-items: start;
 }
 
 .manage-item:hover {
@@ -783,11 +784,53 @@ footer {
     grid-column: span 2;
 }
 
+.manage-matched {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.manage-matched-repo,
+.manage-matched-app {
+    padding: 12px;
+    background: var(--bg-secondary);
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    transition: all 0.2s;
+}
+
+.manage-matched-repo:hover,
+.manage-matched-app:hover {
+    border-color: var(--border-hover);
+    background: var(--card-hover);
+}
+
+.manage-matched-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
 .manage-repo,
 .manage-app {
     display: flex;
     flex-direction: column;
     gap: 8px;
+    min-height: 80px;
+    padding: 12px;
+    background: var(--bg-secondary);
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    transition: all 0.2s;
+}
+
+.manage-repo:hover,
+.manage-app:hover {
+    border-color: var(--border-hover);
+    background: var(--card-hover);
 }
 
 .manage-repo-header,
@@ -846,14 +889,16 @@ footer {
 }
 
 .manage-column-header {
-    font-weight: 600;
-    color: var(--text-primary);
-    font-size: 0.9rem;
-    margin-bottom: 12px;
-    padding-bottom: 8px;
-    border-bottom: 2px solid var(--border-color);
+    font-weight: 700;
+    color: var(--primary-color);
+    font-size: 0.95rem;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 3px solid var(--primary-color);
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: 1px;
+    text-align: center;
+    padding-top: 4px;
 }
 
 .manage-checkbox-wrapper {
