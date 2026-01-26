@@ -103,7 +103,7 @@
 
                         <div class="form-group">
                             <label for="port">Container Port:</label>
-                            <div style="display: flex; gap: 8px; align-items: center;">
+                            <div class="port-input-group">
                                 <input 
                                     type="number" 
                                     id="port" 
@@ -111,10 +111,10 @@
                                     placeholder="Auto-generate"
                                     min="3000"
                                     max="65535"
-                                    style="flex: 1;"
                                 >
-                                <button type="button" onclick="generatePort()" class="btn-secondary" style="width: auto; padding: 10px 16px; white-space: nowrap;">
-                                    Generate Port
+                                <button type="button" onclick="generatePort()" class="btn-secondary btn-generate-port">
+                                    <span>🎲</span>
+                                    <span>Generate Port</span>
                                 </button>
                             </div>
                             <small>Port for the container (leave empty to auto-generate)</small>
