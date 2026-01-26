@@ -102,6 +102,25 @@
                         </div>
 
                         <div class="form-group">
+                            <label for="port">Container Port:</label>
+                            <div style="display: flex; gap: 8px; align-items: center;">
+                                <input 
+                                    type="number" 
+                                    id="port" 
+                                    name="port" 
+                                    placeholder="Auto-generate"
+                                    min="3000"
+                                    max="65535"
+                                    style="flex: 1;"
+                                >
+                                <button type="button" onclick="generatePort()" class="btn-secondary" style="width: auto; padding: 10px 16px; white-space: nowrap;">
+                                    Generate Port
+                                </button>
+                            </div>
+                            <small>Port for the container (leave empty to auto-generate)</small>
+                        </div>
+
+                        <div class="form-group">
                             <label class="checkbox-label" style="margin-bottom: 12px;">
                                 <input 
                                     type="checkbox" 
