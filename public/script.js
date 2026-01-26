@@ -1220,115 +1220,43 @@ function showToast(message, type = 'info', duration = 5000) {
     }, duration);
 }
 
-// Hostinger DNS Iframe Modal Functions
+// Hostinger DNS Functions
 function openHostingerDNS(domain) {
-    const modal = document.getElementById('hostingerModal');
-    const iframe = document.getElementById('hostingerIframe');
-    const title = document.getElementById('hostingerModalTitle');
-    
-    if (!modal || !iframe || !title) {
-        console.error('Hostinger modal elements not found');
-        showToast('Error: Modal elements not found', 'error');
-        return;
-    }
-    
     const hostingerUrl = `https://hpanel.hostinger.com/domain/${domain}/dns?tab=dns_records`;
-    
-    title.textContent = `Hostinger DNS Settings - ${domain}`;
-    iframe.src = hostingerUrl;
-    
-    modal.classList.add('show');
-    modal.style.display = 'flex';
+    window.open(hostingerUrl, '_blank');
+    showToast('Hostinger DNS page opened in new tab. Use the auto-fill script below.', 'info');
 }
 
-function closeHostingerModal() {
-    const modal = document.getElementById('hostingerModal');
-    const iframe = document.getElementById('hostingerIframe');
+function copyHostingerScript(elementId) {
+    const scriptElement = document.getElementById(elementId);
+    if (!scriptElement) return;
     
-    if (!modal) return;
+    const text = scriptElement.textContent || scriptElement.innerText;
     
-    modal.classList.remove('show');
-    setTimeout(() => {
-        modal.style.display = 'none';
-        if (iframe) {
-            iframe.src = ''; // Clear iframe src when closing
-        }
-    }, 200);
-}
-
-function fillHostingerFields() {
-    const iframe = document.getElementById('hostingerIframe');
-    
-    if (!iframe) {
-        showToast('Iframe not found', 'error');
-        return;
-    }
-    
-    try {
-        // Access iframe content (may fail due to CORS)
-        const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
-        
-        const pointsToField = iframeDoc.getElementById('hdomains_dns_create_record_pointsTo');
-        const ttlField = iframeDoc.getElementById('hdomains_dns_create_record_ttl');
-        
-        if (pointsToField && ttlField) {
-            pointsToField.value = '46.202.178.170';
-            pointsToField.dispatchEvent(new Event('input', { bubbles: true }));
-            pointsToField.dispatchEvent(new Event('change', { bubbles: true }));
-            
-            ttlField.value = '60';
-            ttlField.dispatchEvent(new Event('input', { bubbles: true }));
-            ttlField.dispatchEvent(new Event('change', { bubbles: true }));
-            
-            showToast('DNS fields filled successfully!', 'success');
-        } else {
-            showToast('Fields not found. Make sure you are on the DNS records page and the form is visible.', 'warning');
-        }
-    } catch (error) {
-        // CORS error - provide fallback script
-        const script = `
-(function() {
-    const pointsToField = document.getElementById('hdomains_dns_create_record_pointsTo');
-    const ttlField = document.getElementById('hdomains_dns_create_record_ttl');
-    if (pointsToField) {
-        pointsToField.value = '46.202.178.170';
-        pointsToField.dispatchEvent(new Event('input', { bubbles: true }));
-        pointsToField.dispatchEvent(new Event('change', { bubbles: true }));
-    }
-    if (ttlField) {
-        ttlField.value = '60';
-        ttlField.dispatchEvent(new Event('input', { bubbles: true }));
-        ttlField.dispatchEvent(new Event('change', { bubbles: true }));
-    }
-    if (pointsToField && ttlField) {
-        alert('Fields filled! Type: A, Name: @, Points to: 46.202.178.170, TTL: 60');
-    } else {
-        alert('Fields not found. Make sure you are on the DNS records page.');
-    }
-})();
-        `.trim();
-        
-        showErrorModal(
-            'Cross-Origin Restriction',
-            `Due to browser security, we cannot directly fill fields in the iframe.\n\nPlease copy and paste this script into the browser console (F12) on the Hostinger page:\n\n${script}`
-        );
-    }
+    navigator.clipboard.writeText(text).then(() => {
+        scriptElement.style.borderColor = 'var(--success-color)';
+        scriptElement.style.background = 'var(--bg-secondary)';
+        setTimeout(() => {
+            scriptElement.style.borderColor = 'var(--border-color)';
+            scriptElement.style.background = 'var(--card-bg)';
+        }, 2000);
+        showToast('Script copied! Paste it into the browser console (F12) on Hostinger page.', 'success');
+    }).catch(err => {
+        console.error('Failed to copy:', err);
+        showToast('Failed to copy script', 'error');
+    });
 }
 
 // Close modal when clicking outside
 window.onclick = function(event) {
     const errorModal = document.getElementById('errorModal');
     const confirmModal = document.getElementById('confirmModal');
-    const hostingerModal = document.getElementById('hostingerModal');
     
     if (event.target === errorModal) {
         closeErrorModal();
     }
     if (event.target === confirmModal) {
         closeConfirmModal();
-    }
-    if (event.target === hostingerModal) {
-        closeHostingerModal();
     }
 }
 
@@ -1337,6 +1265,5 @@ document.addEventListener('keydown', function(event) {
     if (event.key === 'Escape') {
         closeErrorModal();
         closeConfirmModal();
-        closeHostingerModal();
     }
 });
