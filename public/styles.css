@@ -959,17 +959,39 @@ footer {
     text-decoration: none;
 }
 
-.manage-column-header {
-    font-weight: 700;
-    color: var(--primary-color);
-    font-size: 0.95rem;
-    margin-bottom: 16px;
-    padding-bottom: 12px;
-    border-bottom: 3px solid var(--primary-color);
-    text-transform: uppercase;
-    letter-spacing: 1px;
+/* Manage Search */
+.manage-search-container {
+    margin-bottom: 20px;
+}
+
+.manage-search-input {
+    width: 100%;
+    padding: 12px 16px;
+    background: var(--bg-secondary);
+    border: 2px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-size: 1rem;
+    transition: all 0.2s;
+    font-family: inherit;
+}
+
+.manage-search-input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.2);
+    background: var(--bg-color);
+}
+
+.manage-search-input::placeholder {
+    color: var(--text-muted);
+}
+
+.no-results-message {
     text-align: center;
-    padding-top: 4px;
+    padding: 40px;
+    color: var(--text-secondary);
+    font-size: 1rem;
 }
 
 .manage-checkbox-wrapper {

@@ -79,6 +79,12 @@ function switchManageTab(tab) {
     });
     document.getElementById(`tab-${tab}`).classList.add('active');
     
+    // Clear search input
+    const searchInput = document.getElementById('manageSearchInput');
+    if (searchInput) {
+        searchInput.value = '';
+    }
+    
     // Render the appropriate content
     renderManageTab(tab);
 }
@@ -88,14 +94,31 @@ function renderManageTab(tab) {
     const manageContent = document.getElementById('manageContent');
     let html = '';
     
+    // Add search input
+    const searchPlaceholder = tab === 'matched' ? 'Search matched pairs...' : 
+                              tab === 'repos' ? 'Search repositories...' : 
+                              'Search CapRover apps...';
+    html += `
+        <div class="manage-search-container">
+            <input 
+                type="text" 
+                id="manageSearchInput" 
+                class="manage-search-input" 
+                placeholder="${searchPlaceholder}"
+                oninput="filterManageContent('${tab}')"
+            >
+        </div>
+    `;
+    
     if (tab === 'matched') {
         // Render matched pairs
         if (manageData.matched.length === 0) {
-            html = '<div class="empty-state"><p>No matched repositories and apps found.</p></div>';
+            html += '<div class="empty-state"><p>No matched repositories and apps found.</p></div>';
         } else {
+            html += '<div id="manageItemsContainer">';
             manageData.matched.forEach(({ repo, app, name }) => {
                 html += `
-                    <div class="manage-matched-item">
+                    <div class="manage-matched-item" data-search="${escapeHtml(name.toLowerCase())}">
                         <div class="manage-matched-header-row">
                             <label class="checkbox-label">
                                 <input type="checkbox" class="matched-pair-checkbox" data-repo="${repo.name}" data-app="${app.appName}" onchange="toggleMatchedPair('${repo.name}', '${app.appName}', this.checked)">
@@ -138,15 +161,17 @@ function renderManageTab(tab) {
                     </div>
                 `;
             });
+            html += '</div>';
         }
     } else if (tab === 'repos') {
         // Render all repos
         if (manageData.repos.length === 0) {
-            html = '<div class="empty-state"><p>No repositories found.</p></div>';
+            html += '<div class="empty-state"><p>No repositories found.</p></div>';
         } else {
+            html += '<div id="manageItemsContainer">';
             manageData.repos.forEach(repo => {
                 html += `
-                    <div class="manage-item-single">
+                    <div class="manage-item-single" data-search="${escapeHtml(repo.name.toLowerCase())}">
                         <div class="manage-repo">
                             <div class="manage-repo-header">
                                 <div class="manage-checkbox-wrapper">
@@ -164,15 +189,17 @@ function renderManageTab(tab) {
                     </div>
                 `;
             });
+            html += '</div>';
         }
     } else if (tab === 'apps') {
         // Render all apps
         if (manageData.apps.length === 0) {
-            html = '<div class="empty-state"><p>No CapRover apps found.</p></div>';
+            html += '<div class="empty-state"><p>No CapRover apps found.</p></div>';
         } else {
+            html += '<div id="manageItemsContainer">';
             manageData.apps.forEach(app => {
                 html += `
-                    <div class="manage-item-single">
+                    <div class="manage-item-single" data-search="${escapeHtml(app.appName.toLowerCase())}">
                         <div class="manage-app">
                             <div class="manage-app-header">
                                 <div class="manage-checkbox-wrapper">
@@ -195,11 +222,49 @@ function renderManageTab(tab) {
                     </div>
                 `;
             });
+            html += '</div>';
         }
     }
     
     manageContent.innerHTML = html;
     updateSelectedManageCount();
+}
+
+// Filter manage content based on search input
+function filterManageContent(tab) {
+    const searchInput = document.getElementById('manageSearchInput');
+    const searchTerm = searchInput.value.toLowerCase().trim();
+    const itemsContainer = document.getElementById('manageItemsContainer');
+    
+    if (!itemsContainer) return;
+    
+    const items = itemsContainer.querySelectorAll('[data-search]');
+    let visibleCount = 0;
+    
+    items.forEach(item => {
+        const searchText = item.getAttribute('data-search');
+        if (searchText.includes(searchTerm)) {
+            item.style.display = '';
+            visibleCount++;
+        } else {
+            item.style.display = 'none';
+        }
+    });
+    
+    // Show "no results" message if no items match
+    let noResultsMsg = itemsContainer.querySelector('.no-results-message');
+    if (visibleCount === 0 && searchTerm !== '') {
+        if (!noResultsMsg) {
+            noResultsMsg = document.createElement('div');
+            noResultsMsg.className = 'no-results-message';
+            noResultsMsg.style.cssText = 'text-align: center; padding: 40px; color: var(--text-secondary);';
+            noResultsMsg.textContent = 'No results found';
+            itemsContainer.appendChild(noResultsMsg);
+        }
+        noResultsMsg.style.display = 'block';
+    } else if (noResultsMsg) {
+        noResultsMsg.style.display = 'none';
+    }
 }
 
 // Toggle matched pair checkbox (selects both repo and app)
