@@ -829,15 +829,7 @@ form.addEventListener('submit', async (e) => {
             // Add DNS instructions if domain was provided
             if (formData.isDomain && formData.domain) {
                 const hostingerUrl = `https://hpanel.hostinger.com/domain/${formData.domain}/dns?tab=dns_records`;
-                        <a href="#" onclick="openHostingerDNS('${escapeHtml(formData.domain)}'); return false;" class="modal-link-btn" style="margin-top: 8px;">
-                            Open Hostinger DNS Settings
-                        </a>
-                        <div style="margin-top: 12px; padding: 12px; background: var(--bg-color); border-radius: 8px; width: 100%; border: 1px solid var(--border-color);">
-                            <strong style="color: var(--text-primary); font-size: 0.9rem; display: block; margin-bottom: 8px;">⚡ Auto-Fill:</strong>
-                            <p style="margin: 0 0 8px 0; color: var(--text-secondary); font-size: 0.85rem;">
-                                Click "Auto-Fill DNS Fields" button in the Hostinger window to automatically fill the form fields.
-                            </p>
-                        </div>
+                resultHtml += `
                     <div class="result-item" style="flex-direction: column; align-items: flex-start; gap: 12px; margin-top: 16px; padding: 20px; background: var(--bg-secondary); border: 2px solid var(--primary-color);">
                         <strong style="color: var(--primary-color); font-size: 1.1rem;">🌐 DNS Configuration Required</strong>
                         <p style="margin: 0; color: var(--text-secondary);">
@@ -849,20 +841,15 @@ form.addEventListener('submit', async (e) => {
                             <div><strong>Points to:</strong> 46.202.178.170</div>
                             <div><strong>TTL:</strong> 60</div>
                         </div>
-                        <a href="${hostingerUrl}" target="_blank" class="modal-link-btn" style="margin-top: 8px;">
+                        <a href="#" onclick="openHostingerDNS('${escapeHtml(formData.domain)}'); return false;" class="modal-link-btn" style="margin-top: 8px;">
                             Open Hostinger DNS Settings
                         </a>
                         <div style="margin-top: 12px; padding: 12px; background: var(--bg-color); border-radius: 8px; width: 100%; border: 1px solid var(--border-color);">
-                            <strong style="color: var(--text-primary); font-size: 0.9rem; display: block; margin-bottom: 8px;">⚡ Auto-Fill Script:</strong>
+                            <strong style="color: var(--text-primary); font-size: 0.9rem; display: block; margin-bottom: 8px;">⚡ Auto-Fill:</strong>
                             <p style="margin: 0 0 8px 0; color: var(--text-secondary); font-size: 0.85rem;">
-                                After opening Hostinger DNS page, copy and paste this script into the browser console (F12) to auto-fill the fields:
+                                Click "Auto-Fill DNS Fields" button in the Hostinger window to automatically fill the form fields.
                             </p>
-                            <pre style="background: var(--card-bg); padding: 10px; border-radius: 6px; overflow-x: auto; font-size: 0.8rem; margin: 0; border: 1px solid var(--border-color); cursor: pointer;" onclick="navigator.clipboard.writeText(this.textContent).then(() => { this.style.borderColor='var(--success-color)'; setTimeout(() => this.style.borderColor='var(--border-color)', 2000); })" title="Click to copy">${escapeHtml(fillScript)}</pre>
-                            <small style="color: var(--text-muted); margin-top: 4px; display: block;">Click the code block above to copy the script</small>
                         </div>
-                        <small style="color: var(--text-muted); margin-top: 8px;">
-                            Or manually fill: Type=A, Name=@, Points to=46.202.178.170, TTL=60
-                        </small>
                     </div>
                 `;
             }
