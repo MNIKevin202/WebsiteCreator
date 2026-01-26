@@ -123,9 +123,7 @@ form.addEventListener('submit', async (e) => {
     // Get form data
     const formData = {
         projectName: document.getElementById('projectName').value.trim(),
-        branch: document.getElementById('branch').value.trim() || 'main',
-        githubUsername: document.getElementById('githubUsername').value.trim(),
-        githubPassword: document.getElementById('githubPassword').value.trim()
+        branch: document.getElementById('branch').value.trim() || 'main'
     };
     
     try {

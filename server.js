@@ -400,15 +400,19 @@ app.post('/api/create-website', requireAuth, async (req, res) => {
   console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] POST /api/create-website`);
   
   try {
-    const { projectName, branch = 'main', githubUsername, githubPassword } = req.body;
+    const { projectName, branch = 'main' } = req.body;
     
     if (!projectName) {
       return res.status(400).json({ error: 'Project name is required' });
     }
     
-    if (!githubUsername || !githubPassword) {
-      return res.status(400).json({ error: 'GitHub username and password/token are required' });
+    // Use GitHub credentials from environment variables
+    if (!GITHUB_USERNAME || !GITHUB_PASSWORD) {
+      return res.status(400).json({ error: 'GitHub credentials not configured. Please set GITHUB_USERNAME and GITHUB_PASSWORD environment variables.' });
     }
+    
+    const githubUsername = GITHUB_USERNAME;
+    const githubPassword = GITHUB_PASSWORD;
     
     // Step 1: Create GitHub repository
     console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 1: Creating GitHub repository: ${projectName}`);
