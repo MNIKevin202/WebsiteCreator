@@ -203,9 +203,10 @@ async function bulkDeleteRepos() {
     
     // Show results
     if (failCount > 0) {
-        alert(`Deleted ${successCount} repository/repositories successfully.\n\nFailed to delete ${failCount}:\n${errors.join('\n')}`);
+        const errorMessage = `Deleted ${successCount} repository/repositories successfully.\n\nFailed to delete ${failCount}:\n${errors.join('\n')}`;
+        showErrorModal('Bulk Delete Results', errorMessage);
     } else {
-        alert(`Successfully deleted ${successCount} repository/repositories!`);
+        showErrorModal('Success', `Successfully deleted ${successCount} repository/repositories!`);
     }
     
     // Reload repos list
@@ -432,7 +433,7 @@ async function deleteApp(appName) {
             throw new Error(data.error || 'Failed to delete app');
         }
     } catch (error) {
-        alert(error.message || 'Failed to delete app');
+        showErrorModal('Delete App Error', error.message || 'Failed to delete app');
         deleteBtn.disabled = false;
         deleteBtn.textContent = 'Delete';
     }
@@ -615,5 +616,70 @@ if (projectNameInput) {
     });
 }
 
-// Check auth status on page load
-checkAuthStatus();
+// Error Modal Functions
+function showErrorModal(title, message) {
+    const modal = document.getElementById('errorModal');
+    const modalTitle = document.getElementById('errorModalTitle');
+    const modalMessage = document.getElementById('errorModalMessage');
+    
+    modalTitle.textContent = title || 'Error';
+    
+    // Format message - if it's a string with newlines, preserve them
+    if (typeof message === 'string') {
+        modalMessage.innerHTML = `<pre>${escapeHtml(message)}</pre>`;
+    } else {
+        modalMessage.innerHTML = `<pre>${escapeHtml(JSON.stringify(message, null, 2))}</pre>`;
+    }
+    
+    modal.classList.add('show');
+    modal.style.display = 'flex';
+}
+
+function closeErrorModal() {
+    const modal = document.getElementById('errorModal');
+    modal.classList.remove('show');
+    setTimeout(() => {
+        modal.style.display = 'none';
+    }, 200);
+}
+
+function copyErrorToClipboard() {
+    const modalMessage = document.getElementById('errorModalMessage');
+    const text = modalMessage.textContent || modalMessage.innerText;
+    
+    navigator.clipboard.writeText(text).then(() => {
+        const copyBtn = event.target;
+        const originalText = copyBtn.textContent;
+        copyBtn.textContent = '✓ Copied!';
+        copyBtn.style.background = 'var(--success-color)';
+        
+        setTimeout(() => {
+            copyBtn.textContent = originalText;
+            copyBtn.style.background = '';
+        }, 2000);
+    }).catch(err => {
+        console.error('Failed to copy:', err);
+        alert('Failed to copy to clipboard');
+    });
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Close modal when clicking outside
+window.onclick = function(event) {
+    const modal = document.getElementById('errorModal');
+    if (event.target === modal) {
+        closeErrorModal();
+    }
+}
+
+// Close modal with Escape key
+document.addEventListener('keydown', function(event) {
+    if (event.key === 'Escape') {
+        closeErrorModal();
+    }
+});
