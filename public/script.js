@@ -71,6 +71,10 @@ async function loadRepos() {
     reposList.style.display = 'none';
     reposError.style.display = 'none';
     
+    // Reset select all checkbox
+    document.getElementById('selectAllRepos').checked = false;
+    updateSelectedReposCount();
+    
     try {
         const response = await fetch('/api/repos', {
             credentials: 'include'
@@ -89,10 +93,13 @@ async function loadRepos() {
             if (data.repos && data.repos.length > 0) {
                 reposContent.innerHTML = data.repos.map(repo => `
                     <div class="repo-item">
-                        <div class="repo-item-info">
-                            <div class="repo-item-name">${repo.name}</div>
-                            <div class="repo-item-url">
-                                <a href="${repo.html_url}" target="_blank">${repo.html_url}</a>
+                        <div class="repo-item-checkbox">
+                            <input type="checkbox" class="repo-checkbox" value="${repo.name}" onchange="updateSelectedReposCount()">
+                            <div class="repo-item-info">
+                                <div class="repo-item-name">${repo.name}</div>
+                                <div class="repo-item-url">
+                                    <a href="${repo.html_url}" target="_blank">${repo.html_url}</a>
+                                </div>
                             </div>
                         </div>
                         <button onclick="deleteRepo('${repo.name}')" class="btn-danger" id="delete-repo-${repo.name}">
@@ -113,6 +120,96 @@ async function loadRepos() {
         reposErrorContent.textContent = error.message || 'Failed to load repositories';
         reposError.style.display = 'block';
     }
+}
+
+// Toggle select all repos
+function toggleSelectAllRepos() {
+    const selectAll = document.getElementById('selectAllRepos').checked;
+    const checkboxes = document.querySelectorAll('.repo-checkbox');
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = selectAll;
+    });
+    updateSelectedReposCount();
+}
+
+// Update selected repos count
+function updateSelectedReposCount() {
+    const checkboxes = document.querySelectorAll('.repo-checkbox');
+    const selected = Array.from(checkboxes).filter(cb => cb.checked);
+    const count = selected.length;
+    document.getElementById('selectedReposCount').textContent = count;
+    document.getElementById('bulkDeleteReposBtn').disabled = count === 0;
+    
+    // Update select all checkbox state
+    const selectAll = document.getElementById('selectAllRepos');
+    if (checkboxes.length === 0) {
+        selectAll.checked = false;
+        selectAll.indeterminate = false;
+    } else {
+        selectAll.checked = count === checkboxes.length;
+        selectAll.indeterminate = count > 0 && count < checkboxes.length;
+    }
+}
+
+// Bulk delete repositories
+async function bulkDeleteRepos() {
+    const checkboxes = document.querySelectorAll('.repo-checkbox:checked');
+    const selectedRepos = Array.from(checkboxes).map(cb => cb.value);
+    
+    if (selectedRepos.length === 0) {
+        return;
+    }
+    
+    if (!confirm(`Are you sure you want to delete ${selectedRepos.length} repository/repositories? This action cannot be undone.\n\nRepositories:\n${selectedRepos.join('\n')}`)) {
+        return;
+    }
+    
+    const bulkDeleteBtn = document.getElementById('bulkDeleteReposBtn');
+    bulkDeleteBtn.disabled = true;
+    bulkDeleteBtn.textContent = `Deleting... (0/${selectedRepos.length})`;
+    
+    let successCount = 0;
+    let failCount = 0;
+    const errors = [];
+    
+    for (let i = 0; i < selectedRepos.length; i++) {
+        const repoName = selectedRepos[i];
+        bulkDeleteBtn.textContent = `Deleting... (${i + 1}/${selectedRepos.length})`;
+        
+        try {
+            const response = await fetch(`/api/repos/${encodeURIComponent(repoName)}`, {
+                method: 'DELETE',
+                credentials: 'include'
+            });
+            
+            if (response.status === 401) {
+                showLogin();
+                return;
+            }
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                successCount++;
+            } else {
+                failCount++;
+                errors.push(`${repoName}: ${data.error || 'Failed to delete'}`);
+            }
+        } catch (error) {
+            failCount++;
+            errors.push(`${repoName}: ${error.message || 'Failed to delete'}`);
+        }
+    }
+    
+    // Show results
+    if (failCount > 0) {
+        alert(`Deleted ${successCount} repository/repositories successfully.\n\nFailed to delete ${failCount}:\n${errors.join('\n')}`);
+    } else {
+        alert(`Successfully deleted ${successCount} repository/repositories!`);
+    }
+    
+    // Reload repos list
+    loadRepos();
 }
 
 // Delete GitHub repository
@@ -163,6 +260,10 @@ async function loadApps() {
     appsList.style.display = 'none';
     appsError.style.display = 'none';
     
+    // Reset select all checkbox
+    document.getElementById('selectAllApps').checked = false;
+    updateSelectedAppsCount();
+    
     try {
         const response = await fetch('/api/apps', {
             credentials: 'include'
@@ -181,11 +282,14 @@ async function loadApps() {
             if (data.apps && data.apps.length > 0) {
                 appsContent.innerHTML = data.apps.map(app => `
                     <div class="app-item">
-                        <div class="app-item-info">
-                            <div class="app-item-name">${app.appName}</div>
-                            <div class="app-item-url">
-                                Port: ${app.containerHttpPort || 'N/A'} | 
-                                Instances: ${app.instanceCount || 1}
+                        <div class="app-item-checkbox">
+                            <input type="checkbox" class="app-checkbox" value="${app.appName}" onchange="updateSelectedAppsCount()">
+                            <div class="app-item-info">
+                                <div class="app-item-name">${app.appName}</div>
+                                <div class="app-item-url">
+                                    Port: ${app.containerHttpPort || 'N/A'} | 
+                                    Instances: ${app.instanceCount || 1}
+                                </div>
                             </div>
                         </div>
                         <button onclick="deleteApp('${app.appName}')" class="btn-danger" id="delete-app-${app.appName}">
@@ -206,6 +310,96 @@ async function loadApps() {
         appsErrorContent.textContent = error.message || 'Failed to load apps';
         appsError.style.display = 'block';
     }
+}
+
+// Toggle select all apps
+function toggleSelectAllApps() {
+    const selectAll = document.getElementById('selectAllApps').checked;
+    const checkboxes = document.querySelectorAll('.app-checkbox');
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = selectAll;
+    });
+    updateSelectedAppsCount();
+}
+
+// Update selected apps count
+function updateSelectedAppsCount() {
+    const checkboxes = document.querySelectorAll('.app-checkbox');
+    const selected = Array.from(checkboxes).filter(cb => cb.checked);
+    const count = selected.length;
+    document.getElementById('selectedAppsCount').textContent = count;
+    document.getElementById('bulkDeleteAppsBtn').disabled = count === 0;
+    
+    // Update select all checkbox state
+    const selectAll = document.getElementById('selectAllApps');
+    if (checkboxes.length === 0) {
+        selectAll.checked = false;
+        selectAll.indeterminate = false;
+    } else {
+        selectAll.checked = count === checkboxes.length;
+        selectAll.indeterminate = count > 0 && count < checkboxes.length;
+    }
+}
+
+// Bulk delete CapRover apps
+async function bulkDeleteApps() {
+    const checkboxes = document.querySelectorAll('.app-checkbox:checked');
+    const selectedApps = Array.from(checkboxes).map(cb => cb.value);
+    
+    if (selectedApps.length === 0) {
+        return;
+    }
+    
+    if (!confirm(`Are you sure you want to delete ${selectedApps.length} app/apps? This action cannot be undone.\n\nApps:\n${selectedApps.join('\n')}`)) {
+        return;
+    }
+    
+    const bulkDeleteBtn = document.getElementById('bulkDeleteAppsBtn');
+    bulkDeleteBtn.disabled = true;
+    bulkDeleteBtn.textContent = `Deleting... (0/${selectedApps.length})`;
+    
+    let successCount = 0;
+    let failCount = 0;
+    const errors = [];
+    
+    for (let i = 0; i < selectedApps.length; i++) {
+        const appName = selectedApps[i];
+        bulkDeleteBtn.textContent = `Deleting... (${i + 1}/${selectedApps.length})`;
+        
+        try {
+            const response = await fetch(`/api/apps/${encodeURIComponent(appName)}`, {
+                method: 'DELETE',
+                credentials: 'include'
+            });
+            
+            if (response.status === 401) {
+                showLogin();
+                return;
+            }
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                successCount++;
+            } else {
+                failCount++;
+                errors.push(`${appName}: ${data.error || 'Failed to delete'}`);
+            }
+        } catch (error) {
+            failCount++;
+            errors.push(`${appName}: ${error.message || 'Failed to delete'}`);
+        }
+    }
+    
+    // Show results
+    if (failCount > 0) {
+        alert(`Deleted ${successCount} app/apps successfully.\n\nFailed to delete ${failCount}:\n${errors.join('\n')}`);
+    } else {
+        alert(`Successfully deleted ${successCount} app/apps!`);
+    }
+    
+    // Reload apps list
+    loadApps();
 }
 
 // Delete CapRover app

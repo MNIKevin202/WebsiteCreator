@@ -133,6 +133,15 @@
                         <p>Loading repositories...</p>
                     </div>
                     <div id="reposList" class="form-card" style="display: none;">
+                        <div class="bulk-actions">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="selectAllRepos" onchange="toggleSelectAllRepos()">
+                                <span>Select All</span>
+                            </label>
+                            <button onclick="bulkDeleteRepos()" id="bulkDeleteReposBtn" class="btn-danger" disabled>
+                                Delete Selected (<span id="selectedReposCount">0</span>)
+                            </button>
+                        </div>
                         <div id="reposContent"></div>
                     </div>
                     <div id="reposError" class="error-card" style="display: none;">
@@ -147,6 +156,15 @@
                         <p>Loading apps...</p>
                     </div>
                     <div id="appsList" class="form-card" style="display: none;">
+                        <div class="bulk-actions">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="selectAllApps" onchange="toggleSelectAllApps()">
+                                <span>Select All</span>
+                            </label>
+                            <button onclick="bulkDeleteApps()" id="bulkDeleteAppsBtn" class="btn-danger" disabled>
+                                Delete Selected (<span id="selectedAppsCount">0</span>)
+                            </button>
+                        </div>
                         <div id="appsContent"></div>
                     </div>
                     <div id="appsError" class="error-card" style="display: none;">
