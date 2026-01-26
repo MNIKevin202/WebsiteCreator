@@ -5,6 +5,14 @@ const axios = require('axios');
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const session = require('express-session');
+const {
+  caproverLogin,
+  caproverEnsureApp,
+  caproverSetContainerHttpPort,
+  caproverSetEnvVars,
+  caproverGetEnvVars,
+  caproverSetGitHubDeployment,
+} = require('./caproverClient');
 
 // Load .env file only in local development (not in CapRover)
 // CapRover provides environment variables directly
@@ -70,7 +78,6 @@ const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 const CAPROVER_URL = process.env.CAPROVER_URL; // e.g., https://captain.yourdomain.com
 const CAPROVER_PASSWORD = process.env.CAPROVER_PASSWORD;
 const GITHUB_USERNAME = process.env.GITHUB_USERNAME;
-const GITHUB_PASSWORD = process.env.GITHUB_PASSWORD; // Personal Access Token or password
 const MONGO_URI = process.env.MONGO_URI;
 
 // MongoDB connection
@@ -681,122 +688,75 @@ app.post('/api/create-website', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'Project name is required' });
     }
     
-    // Use GitHub credentials from environment variables
-    if (!GITHUB_USERNAME || !GITHUB_PASSWORD) {
-      return res.status(400).json({ error: 'GitHub credentials not configured. Please set GITHUB_USERNAME and GITHUB_PASSWORD environment variables.' });
+    // Validate GitHub credentials (use token, not password)
+    if (!GITHUB_TOKEN) {
+      return res.status(400).json({ error: 'GitHub credentials not configured. Please set GITHUB_TOKEN environment variable.' });
     }
     
-    const githubUsername = GITHUB_USERNAME;
-    const githubPassword = GITHUB_PASSWORD;
+    if (!GITHUB_USERNAME) {
+      return res.status(400).json({ error: 'GitHub username not configured. Please set GITHUB_USERNAME environment variable.' });
+    }
     
     // Step 1: Create GitHub repository
     console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 1: Creating GitHub repository: ${projectName}`);
     const githubResult = await createGitHubRepo(projectName, true);
-    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 1: GitHub repo created: ${githubResult.repoUrl}`);
+    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 1: ✅ GitHub repo created: ${githubResult.repoUrl}`);
     
-    // Step 2: Authenticate with CapRover
-    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 2: Authenticating with CapRover at ${CAPROVER_URL}...`);
-    const authToken = await getCapRoverAuthToken();
-    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 2: CapRover authentication successful`);
+    // Step 2: Authenticate with CapRover ONCE
+    const baseUrl = CAPROVER_URL.replace(/\/+$/, '');
+    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 2: Authenticating with CapRover at ${baseUrl}...`);
+    const token = await caproverLogin(baseUrl, CAPROVER_PASSWORD);
+    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 2: ✅ CapRover authentication successful`);
     
-    // Step 3: Get used ports and find available port
-    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 3: Finding available port...`);
-    const usedPorts = await getUsedPorts(authToken);
-    const availablePort = findNextAvailablePort(usedPorts);
-    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 3: Available port found: ${availablePort} (used ports: ${Array.from(usedPorts).join(', ') || 'none'})`);
+    // Step 3: Determine port (standardize to 3000 for all Node apps)
+    const containerPort = 3000; // Standard port for all apps
+    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 3: Using standard container port: ${containerPort}`);
     
-    // Check if app already exists
-    const existingApp = await getAppDefinition(projectName, authToken);
-    if (existingApp) {
-      console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] ⚠️ CapRover app "${projectName}" already exists, will update instead of create`);
-    }
-    
-    // Step 4: Create CapRover app (if it doesn't exist)
-    if (!existingApp) {
-      console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 4: Creating CapRover app: ${projectName}`);
-      
-      // Re-authenticate right before creating app to ensure fresh token
-      console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 4: Re-authenticating with CapRover for app creation...`);
-      let appCreationToken = await getCapRoverAuthToken();
-      console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 4: Got fresh token for app creation`);
-      
-      try {
-        await createCapRoverApp(projectName, appCreationToken);
-        console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 4: CapRover app creation API call completed`);
-        
-        // Verify the app was actually created
-        console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 4: Verifying app was created...`);
-        await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second for CapRover to process
-        
-        // Re-authenticate again for verification
-        appCreationToken = await getCapRoverAuthToken();
-        let verifyApp = await getAppDefinition(projectName, appCreationToken);
-        
-        // If app not found and error was auth-related, retry with fresh token
-        if (!verifyApp) {
-          console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 4: App not found, checking if auth token expired...`);
-          // Re-authenticate and retry verification
-          appCreationToken = await getCapRoverAuthToken();
-          verifyApp = await getAppDefinition(projectName, appCreationToken);
-          if (verifyApp) {
-            authToken = appCreationToken; // Use fresh token for subsequent operations
-            console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] ✅ Step 4: Verified - CapRover app "${projectName}" exists (after re-auth)`);
-          } else {
-            throw new Error(`CapRover app "${projectName}" was not created successfully. The API call succeeded but the app does not exist.`);
-          }
-        } else {
-          authToken = appCreationToken; // Use fresh token for subsequent operations
-          console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] ✅ Step 4: Verified - CapRover app "${projectName}" exists`);
-        }
-      } catch (error) {
-        // If error is auth-related, try re-authenticating and retrying once
-        if (error.isAuthTokenError || (error.message && error.message.includes('Auth token corrupted'))) {
-          console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 4: Auth token expired, re-authenticating and retrying...`);
-          try {
-            appCreationToken = await getCapRoverAuthToken();
-            console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 4: Got fresh token, waiting 500ms before retry...`);
-            await new Promise(resolve => setTimeout(resolve, 500)); // Wait a bit for token to be ready
-            
-            await createCapRoverApp(projectName, appCreationToken);
-            authToken = appCreationToken; // Use fresh token for subsequent operations
-            
-            // Verify again
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            appCreationToken = await getCapRoverAuthToken(); // Fresh token for verification
-            const verifyApp = await getAppDefinition(projectName, appCreationToken);
-            if (!verifyApp) {
-              throw new Error(`CapRover app "${projectName}" was not created successfully after retry.`);
-            }
-            console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] ✅ Step 4: CapRover app created successfully after re-auth`);
-          } catch (retryError) {
-            console.error(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 4: Retry also failed:`, retryError.message);
-            // If retry also fails with auth error, it might be a different issue
-            if (retryError.isAuthTokenError || (retryError.message && retryError.message.includes('Auth token corrupted'))) {
-              throw new Error(`CapRover authentication failed even after re-authentication. This may indicate a CapRover configuration issue. Original error: ${error.message}`);
-            }
-            throw retryError;
-          }
-        } else {
-          console.error(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 4: Failed to create CapRover app:`, error.message);
-          throw error; // Re-throw to be caught by outer catch
-        }
-      }
+    // Step 4: Ensure app exists (idempotent)
+    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 4: Ensuring CapRover app exists: ${projectName}`);
+    const appResult = await caproverEnsureApp(baseUrl, token, projectName);
+    if (appResult.created) {
+      console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 4: ✅ CapRover app created`);
     } else {
-      console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 4: Skipping app creation (app already exists)`);
+      console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 4: ✅ CapRover app already exists, continuing`);
     }
     
-    // Step 5: Configure GitHub deployment and set container HTTP port
-    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 5: Configuring GitHub deployment and setting container HTTP port to ${availablePort}...`);
-    await configureCapRoverApp(
-      projectName,
-      githubResult.cloneUrl,
-      branch,
-      githubUsername,
-      githubPassword,
-      availablePort,
-      authToken
-    );
-    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 5: Configuration completed successfully`);
+    // Step 5: Set Container HTTP Port
+    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 5: Setting container HTTP port to ${containerPort}...`);
+    await caproverSetContainerHttpPort(baseUrl, token, projectName, containerPort);
+    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 5: ✅ Container HTTP port set to ${containerPort}`);
+    
+    // Step 6: Set environment variables
+    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 6: Setting environment variables...`);
+    const envVars = {
+      PORT: String(containerPort),
+      GITHUB_USERNAME: GITHUB_USERNAME,
+      GITHUB_TOKEN: GITHUB_TOKEN,
+      REPO_NAME: projectName,
+      REPO_URL: githubResult.cloneUrl,
+      REPO_BRANCH: branch
+    };
+    await caproverSetEnvVars(baseUrl, token, projectName, envVars);
+    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 6: ✅ Environment variables set`);
+    
+    // Step 7: Verify env vars were applied
+    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 7: Verifying environment variables...`);
+    const envCheck = await caproverGetEnvVars(baseUrl, token, projectName);
+    const envVarsData = envCheck?.data?.envVars || [];
+    const envKeys = envVarsData.map(e => e.key);
+    
+    // Check that required vars exist
+    const requiredKeys = ['PORT', 'GITHUB_TOKEN'];
+    const missingKeys = requiredKeys.filter(key => !envKeys.includes(key));
+    if (missingKeys.length > 0) {
+      throw new Error(`Environment variables not properly set. Missing: ${missingKeys.join(', ')}. Found keys: ${envKeys.join(', ')}`);
+    }
+    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 7: ✅ Environment variables verified (${envKeys.length} vars found)`);
+    
+    // Step 8: Configure GitHub deployment (optional)
+    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 8: Configuring GitHub deployment...`);
+    await caproverSetGitHubDeployment(baseUrl, token, projectName, githubResult.cloneUrl, branch, GITHUB_TOKEN);
+    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 8: ✅ GitHub deployment configured`);
     
     console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] ✅ All steps completed successfully!`);
     res.json({
@@ -805,7 +765,7 @@ app.post('/api/create-website', requireAuth, async (req, res) => {
       data: {
         githubRepo: githubResult.repoUrl,
         caproverApp: projectName,
-        port: availablePort,
+        port: containerPort,
         branch: branch
       }
     });
@@ -921,7 +881,6 @@ const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`   CAPROVER_URL: ${CAPROVER_URL || '❌ Missing'}`);
   console.log(`   CAPROVER_PASSWORD: ${CAPROVER_PASSWORD ? '✅ Set' : '❌ Missing'}`);
   console.log(`   GITHUB_USERNAME: ${GITHUB_USERNAME || '⚠️  Not set (optional)'}`);
-  console.log(`   GITHUB_PASSWORD: ${GITHUB_PASSWORD ? '✅ Set' : '⚠️  Not set (optional)'}`);
   console.log(`   NODE_ENV: ${process.env.NODE_ENV || 'not set'}`);
   console.log(`   PORT (from env): ${process.env.PORT || 'not set (using default 3800)'}`);
   
