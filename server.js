@@ -2,7 +2,16 @@ const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const axios = require('axios');
-require('dotenv').config();
+
+// Load .env file only in local development (not in CapRover)
+// CapRover provides environment variables directly
+if (process.env.NODE_ENV !== 'production') {
+  try {
+    require('dotenv').config();
+  } catch (e) {
+    // dotenv not available or .env file doesn't exist - that's fine
+  }
+}
 
 const app = express();
 const PORT = process.env.PORT || 3117;
@@ -11,7 +20,9 @@ app.use(cors());
 app.use(bodyParser.json());
 app.use(express.static('public'));
 
-// Configuration from environment variables
+// Configuration from environment variables (set in CapRover App Configs)
+// These are read directly from CapRover's environment variables
+// For local development, you can use a .env file (dotenv will load it automatically)
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 const CAPROVER_URL = process.env.CAPROVER_URL; // e.g., https://captain.yourdomain.com
 const CAPROVER_PASSWORD = process.env.CAPROVER_PASSWORD;
@@ -294,10 +305,18 @@ app.get('/api/health', (req, res) => {
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
-  console.log(`Make sure to set the following environment variables:`);
-  console.log(`- GITHUB_TOKEN`);
-  console.log(`- CAPROVER_URL`);
-  console.log(`- CAPROVER_PASSWORD`);
-  console.log(`- GITHUB_USERNAME (optional, can be provided in form)`);
-  console.log(`- GITHUB_PASSWORD (optional, can be provided in form)`);
+  console.log(`Environment variables loaded from CapRover App Configs`);
+  
+  // Check if required environment variables are set
+  const missingVars = [];
+  if (!GITHUB_TOKEN) missingVars.push('GITHUB_TOKEN');
+  if (!CAPROVER_URL) missingVars.push('CAPROVER_URL');
+  if (!CAPROVER_PASSWORD) missingVars.push('CAPROVER_PASSWORD');
+  
+  if (missingVars.length > 0) {
+    console.warn(`⚠️  Warning: Missing required environment variables: ${missingVars.join(', ')}`);
+    console.warn(`   Set these in CapRover: App Configs → Environment Variables`);
+  } else {
+    console.log(`✅ All required environment variables are set`);
+  }
 });
