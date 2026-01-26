@@ -394,9 +394,10 @@ async function bulkDeleteApps() {
     
     // Show results
     if (failCount > 0) {
-        alert(`Deleted ${successCount} app/apps successfully.\n\nFailed to delete ${failCount}:\n${errors.join('\n')}`);
+        const errorMessage = `Deleted ${successCount} app/apps successfully.\n\nFailed to delete ${failCount}:\n${errors.join('\n')}`;
+        showErrorModal('Bulk Delete Results', errorMessage);
     } else {
-        alert(`Successfully deleted ${successCount} app/apps!`);
+        showErrorModal('Success', `Successfully deleted ${successCount} app/apps!`);
     }
     
     // Reload apps list
