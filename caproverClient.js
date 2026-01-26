@@ -250,15 +250,58 @@ async function caproverSetCustomDomains(baseUrl, token, appName, domains) {
     throw new Error('domains must be an array');
   }
 
-  // Use update endpoint to set customDomain
+  // First, get the current app definition to preserve other settings
+  const getResult = await caproverRequest({
+    baseUrl, token,
+    path: '/api/v2/user/apps/appDefinitions',
+    method: 'GET',
+  });
+
+  const apps = getResult?.data?.appDefinitions || [];
+  const app = apps.find(a => a.appName === appName);
+  
+  if (!app) {
+    throw new Error(`App ${appName} not found`);
+  }
+
+  // Merge custom domains with existing app definition
+  const updatePayload = {
+    appName: app.appName,
+    instanceCount: app.instanceCount || 1,
+    captainDefinitionRelativeFilePath: app.captainDefinitionRelativeFilePath || './captain-definition',
+    notExposeAsWebApp: app.notExposeAsWebApp || false,
+    hasPersistentData: app.hasPersistentData || false,
+    description: app.description || `Auto-configured app: ${appName}`,
+    volumes: app.volumes || [],
+    ports: app.ports || [],
+    preDeployFunction: app.preDeployFunction || '',
+    customNginxConfig: app.customNginxConfig || '',
+    customDomain: domains, // Set the new custom domains
+    forceSsl: app.forceSsl || false,
+    websocketSupport: app.websocketSupport || false,
+    appDeployTokenConfig: app.appDeployTokenConfig || {
+      enabled: false,
+      appDeployToken: ''
+    },
+    // Preserve repoInfo if it exists
+    repoInfo: app.repoInfo || undefined,
+    // Preserve containerHttpPort if it exists
+    containerHttpPort: app.containerHttpPort || undefined,
+  };
+
+  // Remove undefined fields
+  Object.keys(updatePayload).forEach(key => {
+    if (updatePayload[key] === undefined) {
+      delete updatePayload[key];
+    }
+  });
+
+  // Use update endpoint to set customDomain along with other settings
   return caproverRequest({
     baseUrl, token,
     path: '/api/v2/user/apps/appDefinitions/update',
     method: 'POST',
-    body: {
-      appName,
-      customDomain: domains,
-    },
+    body: updatePayload,
   });
 }
 
