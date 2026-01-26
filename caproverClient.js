@@ -121,25 +121,28 @@ async function caproverSetContainerHttpPort(baseUrl, token, appName, containerPo
 
 // Set env vars
 async function caproverSetEnvVars(baseUrl, token, appName, envObj) {
-  // Known endpoint:
-  // POST /api/v2/user/apps/appDefinitions/updateAppEnvVars
-  // Body: { appName, envVars: [{key, value}] }
-  const envVars = Object.entries(envObj).map(([key, value]) => ({ key, value: String(value) }));
+  const envVars = Object.entries(envObj).map(([key, value]) => ({
+    key,
+    value: String(value),
+  }));
 
   return caproverRequest({
-    baseUrl, token,
-    path: '/api/v2/user/apps/appDefinitions/updateAppEnvVars',
+    baseUrl,
+    token,
+    path: '/api/v2/user/apps/appDefinitions/updateEnvVars',
     method: 'POST',
-    body: { appName, envVars },
+    body: {
+      appName,
+      envVars,
+    },
   });
 }
 
 async function caproverGetEnvVars(baseUrl, token, appName) {
-  // Known endpoint:
-  // POST /api/v2/user/apps/appDefinitions/getAppEnvVars
   return caproverRequest({
-    baseUrl, token,
-    path: '/api/v2/user/apps/appDefinitions/getAppEnvVars',
+    baseUrl,
+    token,
+    path: '/api/v2/user/apps/appDefinitions/getEnvVars',
     method: 'POST',
     body: { appName },
   });
