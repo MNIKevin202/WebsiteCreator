@@ -1,104 +1,110 @@
+// Check authentication status on page load
+async function checkAuthStatus() {
+    try {
+        const response = await fetch('/api/auth-status', {
+            credentials: 'include'
+        });
+        const data = await response.json();
+        
+        if (data.isAuthenticated) {
+            showDashboard();
+        } else {
+            showLogin();
+        }
+    } catch (error) {
+        console.error('Error checking auth status:', error);
+        showLogin();
+    }
+}
+
+function showLogin() {
+    document.getElementById('loginCard').style.display = 'block';
+    document.getElementById('dashboard').style.display = 'none';
+}
+
+function showDashboard() {
+    document.getElementById('loginCard').style.display = 'none';
+    document.getElementById('dashboard').style.display = 'block';
+}
+
+// Login form elements
+const loginCard = document.getElementById('loginCard');
+const loginForm = document.getElementById('loginForm');
+const loginBtn = document.getElementById('loginBtn');
+const loginError = document.getElementById('loginError');
+const loginErrorContent = document.getElementById('loginErrorContent');
+
+// Login form submission
+loginForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    loginError.style.display = 'none';
+    loginBtn.disabled = true;
+    const btnText = loginBtn.querySelector('.btn-text');
+    const btnLoader = loginBtn.querySelector('.btn-loader');
+    btnText.style.display = 'none';
+    btnLoader.style.display = 'inline-block';
+    
+    const formData = {
+        username: document.getElementById('username').value.trim(),
+        password: document.getElementById('password').value.trim()
+    };
+    
+    try {
+        const response = await fetch('/api/login', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            credentials: 'include',
+            body: JSON.stringify(formData)
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showDashboard();
+            loginForm.reset();
+        } else {
+            throw new Error(data.error || 'Login failed');
+        }
+    } catch (error) {
+        loginErrorContent.textContent = error.message || 'Login failed. Please try again.';
+        loginError.style.display = 'block';
+    } finally {
+        loginBtn.disabled = false;
+        btnText.style.display = 'inline-block';
+        btnLoader.style.display = 'none';
+    }
+});
+
+// Logout function
+async function logout() {
+    try {
+        const response = await fetch('/api/logout', {
+            method: 'POST',
+            credentials: 'include'
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showLogin();
+        }
+    } catch (error) {
+        console.error('Logout error:', error);
+        // Still show login even if logout fails
+        showLogin();
+    }
+}
+
+// Dashboard form elements
 const form = document.getElementById('createForm');
 const submitBtn = document.getElementById('submitBtn');
 const resultCard = document.getElementById('result');
 const errorCard = document.getElementById('error');
 const resultContent = document.getElementById('resultContent');
 const errorContent = document.getElementById('errorContent');
-
-// Admin form elements
-const adminFormCard = document.getElementById('adminFormCard');
-const adminForm = document.getElementById('adminForm');
-const adminSubmitBtn = document.getElementById('adminSubmitBtn');
-const adminError = document.getElementById('adminError');
-const adminErrorContent = document.getElementById('adminErrorContent');
-
-// Check if admin exists on page load
-async function checkAdminExists() {
-    try {
-        const response = await fetch('/api/check-admin');
-        const data = await response.json();
-        
-        console.log('Admin check response:', data);
-        
-        if (!data.mongoConfigured) {
-            console.warn('MongoDB not configured - showing admin form anyway');
-            // Show admin form even if MongoDB not configured (user can try)
-            adminFormCard.style.display = 'block';
-            form.style.display = 'none';
-            return;
-        }
-        
-        if (!data.adminExists) {
-            // Show admin creation form
-            console.log('No admin exists - showing admin form');
-            adminFormCard.style.display = 'block';
-            form.style.display = 'none';
-        } else {
-            // Show main form
-            console.log('Admin exists - showing main form');
-            adminFormCard.style.display = 'none';
-            form.style.display = 'block';
-        }
-    } catch (error) {
-        console.error('Error checking admin:', error);
-        // Show admin form if check fails (better to show than hide)
-        console.log('Error checking admin - showing admin form as fallback');
-        adminFormCard.style.display = 'block';
-        form.style.display = 'none';
-    }
-}
-
-// Admin form submission
-if (adminForm) {
-    adminForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        
-        adminError.style.display = 'none';
-        adminSubmitBtn.disabled = true;
-        const btnText = adminSubmitBtn.querySelector('.btn-text');
-        const btnLoader = adminSubmitBtn.querySelector('.btn-loader');
-        btnText.style.display = 'none';
-        btnLoader.style.display = 'inline-block';
-        
-        const formData = {
-            username: document.getElementById('adminUsername').value.trim(),
-            password: document.getElementById('adminPassword').value.trim()
-        };
-        
-        try {
-            const response = await fetch('/api/create-admin', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(formData)
-            });
-            
-            const data = await response.json();
-            
-            if (data.success) {
-                // Hide admin form and show main form
-                adminFormCard.style.display = 'none';
-                form.style.display = 'block';
-                alert('Admin account created successfully!');
-            } else {
-                throw new Error(data.error || 'Failed to create admin account');
-            }
-        } catch (error) {
-            adminErrorContent.textContent = error.message || 'Failed to create admin account. Please try again.';
-            adminError.style.display = 'block';
-        } finally {
-            adminSubmitBtn.disabled = false;
-            btnText.style.display = 'inline-block';
-            btnLoader.style.display = 'none';
-        }
-    });
-} else {
-    console.error('Admin form not found in DOM');
-}
-
-// Check admin on page load
-checkAdminExists();
 
 form.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -128,8 +134,15 @@ form.addEventListener('submit', async (e) => {
             headers: {
                 'Content-Type': 'application/json'
             },
+            credentials: 'include',
             body: JSON.stringify(formData)
         });
+        
+        if (response.status === 401) {
+            // Not authenticated, redirect to login
+            showLogin();
+            throw new Error('Session expired. Please login again.');
+        }
         
         const data = await response.json();
         
@@ -180,13 +193,18 @@ function resetForm() {
 
 // Validate project name format
 const projectNameInput = document.getElementById('projectName');
-projectNameInput.addEventListener('input', (e) => {
-    const value = e.target.value;
-    const isValid = /^[a-z0-9-]+$/.test(value) || value === '';
-    
-    if (value && !isValid) {
-        e.target.setCustomValidity('Only lowercase letters, numbers, and hyphens allowed');
-    } else {
-        e.target.setCustomValidity('');
-    }
-});
+if (projectNameInput) {
+    projectNameInput.addEventListener('input', (e) => {
+        const value = e.target.value;
+        const isValid = /^[a-z0-9-]+$/.test(value) || value === '';
+        
+        if (value && !isValid) {
+            e.target.setCustomValidity('Only lowercase letters, numbers, and hyphens allowed');
+        } else {
+            e.target.setCustomValidity('');
+        }
+    });
+}
+
+// Check auth status on page load
+checkAuthStatus();

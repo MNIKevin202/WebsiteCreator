@@ -4,6 +4,7 @@ const bodyParser = require('body-parser');
 const axios = require('axios');
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
+const session = require('express-session');
 
 // Load .env file only in local development (not in CapRover)
 // CapRover provides environment variables directly
@@ -34,8 +35,25 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(cors());
+app.use(cors({
+  origin: true,
+  credentials: true
+}));
 app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
+
+// Session configuration
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'your-secret-key-change-in-production',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: process.env.NODE_ENV === 'production',
+    httpOnly: true,
+    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+  }
+}));
+
 app.use(express.static('public'));
 
 // Log static file serving
@@ -86,6 +104,15 @@ const adminSchema = new mongoose.Schema({
 });
 
 const Admin = mongoose.model('adminLogin', adminSchema, 'adminLogin');
+
+// Authentication middleware
+function requireAuth(req, res, next) {
+  if (req.session && req.session.isAuthenticated) {
+    return next();
+  } else {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+}
 
 // GitHub API helper
 const githubAPI = axios.create({
@@ -294,12 +321,16 @@ async function configureCapRoverApp(appName, repoUrl, branch, username, password
   }
 }
 
-// Admin creation endpoint
-app.post('/api/create-admin', async (req, res) => {
+// Login endpoint
+app.post('/api/login', async (req, res) => {
   const requestId = Date.now();
-  console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] POST /api/create-admin`);
+  console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] POST /api/login`);
   
   try {
+    if (!MONGO_URI) {
+      return res.status(500).json({ error: 'MongoDB not configured' });
+    }
+    
     const { username, password } = req.body;
     
     if (!username || !password) {
@@ -307,74 +338,67 @@ app.post('/api/create-admin', async (req, res) => {
       return res.status(400).json({ error: 'Username and password are required' });
     }
     
-    if (password.length < 6) {
-      console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Validation failed: Password too short`);
-      return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    // Find admin
+    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Looking up admin: ${username}`);
+    const admin = await Admin.findOne({ username: username });
+    
+    if (!admin) {
+      console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Admin not found`);
+      return res.status(401).json({ error: 'Invalid username or password' });
     }
     
-    // Check if admin already exists
-    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Checking if admin already exists...`);
-    const existingAdmin = await Admin.findOne();
+    // Verify password
+    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Verifying password...`);
+    const isValidPassword = await bcrypt.compare(password, admin.password);
     
-    if (existingAdmin) {
-      console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Admin already exists, creation denied`);
-      return res.status(403).json({ 
-        error: 'Admin account already exists. Only one admin account is allowed.' 
-      });
+    if (!isValidPassword) {
+      console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Invalid password`);
+      return res.status(401).json({ error: 'Invalid username or password' });
     }
     
-    // Hash password
-    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Hashing password...`);
-    const hashedPassword = await bcrypt.hash(password, 10);
-    
-    // Create admin
-    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Creating admin account...`);
-    const admin = new Admin({
-      username: username,
-      password: hashedPassword
-    });
-    
-    await admin.save();
-    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] ✅ Admin account created successfully`);
+    // Create session
+    req.session.isAuthenticated = true;
+    req.session.username = admin.username;
+    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] ✅ Login successful`);
     
     res.json({
       success: true,
-      message: 'Admin account created successfully!'
+      message: 'Login successful'
     });
     
   } catch (error) {
-    console.error(`[${new Date().toISOString()}] [REQUEST ${requestId}] ❌ Error creating admin:`, error);
-    
-    if (error.code === 11000) {
-      return res.status(403).json({ 
-        error: 'Admin account already exists. Only one admin account is allowed.' 
-      });
-    }
-    
+    console.error(`[${new Date().toISOString()}] [REQUEST ${requestId}] ❌ Error during login:`, error);
     res.status(500).json({
       success: false,
-      error: error.message || 'Failed to create admin account'
+      error: error.message || 'Failed to login'
     });
   }
 });
 
-// Check if admin exists endpoint
-app.get('/api/check-admin', async (req, res) => {
-  try {
-    const admin = await Admin.findOne();
-    res.json({
-      adminExists: !!admin
-    });
-  } catch (error) {
-    console.error(`[${new Date().toISOString()}] Error checking admin:`, error);
-    res.status(500).json({
-      error: 'Failed to check admin status'
-    });
-  }
+// Logout endpoint
+app.post('/api/logout', (req, res) => {
+  req.session.destroy((err) => {
+    if (err) {
+      console.error(`[${new Date().toISOString()}] Error destroying session:`, err);
+      return res.status(500).json({ error: 'Failed to logout' });
+    }
+    res.json({ success: true, message: 'Logged out successfully' });
+  });
 });
 
-// Main endpoint to create everything
-app.post('/api/create-website', async (req, res) => {
+// Check authentication status
+app.get('/api/auth-status', (req, res) => {
+  res.json({
+    isAuthenticated: !!(req.session && req.session.isAuthenticated),
+    username: req.session?.username || null
+  });
+});
+
+// Main endpoint to create everything (protected)
+app.post('/api/create-website', requireAuth, async (req, res) => {
+  const requestId = Date.now();
+  console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] POST /api/create-website`);
+  
   try {
     const { projectName, branch = 'main', githubUsername, githubPassword } = req.body;
     

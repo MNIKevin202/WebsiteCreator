@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Website Creator - CapRover & GitHub Automation</title>
+    <title>Website Creator - Login</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -14,112 +14,122 @@
         </header>
 
         <main>
-            <!-- Admin Creation Form (shown only if admin doesn't exist) -->
-            <div id="adminFormCard" class="form-card">
-                <h2>🔐 Create Admin Account</h2>
-                <p style="color: var(--text-secondary); margin-bottom: 24px;">Create the first admin account to get started. Only one admin account is allowed.</p>
-                <form id="adminForm">
+            <!-- Login Form -->
+            <div id="loginCard" class="form-card">
+                <h2>🔐 Login</h2>
+                <p style="color: var(--text-secondary); margin-bottom: 24px;">Please login to access the website creator</p>
+                <form id="loginForm">
                     <div class="form-group">
-                        <label for="adminUsername">Username *</label>
+                        <label for="username">Username *</label>
                         <input 
                             type="text" 
-                            id="adminUsername" 
-                            name="adminUsername" 
+                            id="username" 
+                            name="username" 
                             required
-                            placeholder="admin"
+                            placeholder="Enter your username"
+                            autocomplete="username"
                         >
                     </div>
 
                     <div class="form-group">
-                        <label for="adminPassword">Password *</label>
+                        <label for="password">Password *</label>
                         <input 
                             type="password" 
-                            id="adminPassword" 
-                            name="adminPassword" 
+                            id="password" 
+                            name="password" 
                             required
-                            placeholder="Minimum 6 characters"
-                            minlength="6"
+                            placeholder="Enter your password"
+                            autocomplete="current-password"
                         >
-                        <small>Password must be at least 6 characters</small>
                     </div>
 
-                    <button type="submit" id="adminSubmitBtn" class="btn-primary">
-                        <span class="btn-text">Create Admin</span>
+                    <button type="submit" id="loginBtn" class="btn-primary">
+                        <span class="btn-text">Login</span>
+                        <span class="btn-loader" style="display: none;">⏳ Logging in...</span>
+                    </button>
+                </form>
+                <div id="loginError" class="error-card" style="display: none; margin-top: 16px;">
+                    <div id="loginErrorContent"></div>
+                </div>
+            </div>
+
+            <!-- Dashboard (shown after login) -->
+            <div id="dashboard" style="display: none;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                    <h2>Dashboard</h2>
+                    <button onclick="logout()" class="btn-secondary" style="width: auto; padding: 8px 16px;">
+                        Logout
+                    </button>
+                </div>
+
+                <form id="createForm" class="form-card">
+                    <div class="form-group">
+                        <label for="projectName">Project Name *</label>
+                        <input 
+                            type="text" 
+                            id="projectName" 
+                            name="projectName" 
+                            required 
+                            placeholder="my-awesome-project"
+                            pattern="[a-z0-9-]+"
+                            title="Only lowercase letters, numbers, and hyphens allowed"
+                        >
+                        <small>This will be used for both GitHub repo and CapRover app name</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="branch">Git Branch</label>
+                        <input 
+                            type="text" 
+                            id="branch" 
+                            name="branch" 
+                            value="main"
+                            placeholder="main"
+                        >
+                        <small>Default branch for deployment</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="githubUsername">GitHub Username *</label>
+                        <input 
+                            type="text" 
+                            id="githubUsername" 
+                            name="githubUsername" 
+                            required
+                            placeholder="your-username"
+                        >
+                        <small>Your GitHub username</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="githubPassword">GitHub Token/Password *</label>
+                        <input 
+                            type="password" 
+                            id="githubPassword" 
+                            name="githubPassword" 
+                            required
+                            placeholder="ghp_xxxxxxxxxxxx"
+                        >
+                        <small>GitHub Personal Access Token (recommended) or password</small>
+                    </div>
+
+                    <button type="submit" id="submitBtn" class="btn-primary">
+                        <span class="btn-text">Create Website</span>
                         <span class="btn-loader" style="display: none;">⏳ Creating...</span>
                     </button>
                 </form>
-                <div id="adminError" class="error-card" style="display: none; margin-top: 16px;">
-                    <div id="adminErrorContent"></div>
-                </div>
-            </div>
 
-            <form id="createForm" class="form-card">
-                <div class="form-group">
-                    <label for="projectName">Project Name *</label>
-                    <input 
-                        type="text" 
-                        id="projectName" 
-                        name="projectName" 
-                        required 
-                        placeholder="my-awesome-project"
-                        pattern="[a-z0-9-]+"
-                        title="Only lowercase letters, numbers, and hyphens allowed"
-                    >
-                    <small>This will be used for both GitHub repo and CapRover app name</small>
+                <div id="result" class="result-card" style="display: none;">
+                    <h2>✅ Success!</h2>
+                    <div id="resultContent"></div>
+                    <button onclick="resetForm()" class="btn-secondary">Create Another</button>
                 </div>
 
-                <div class="form-group">
-                    <label for="branch">Git Branch</label>
-                    <input 
-                        type="text" 
-                        id="branch" 
-                        name="branch" 
-                        value="main"
-                        placeholder="main"
-                    >
-                    <small>Default branch for deployment</small>
+                <div id="error" class="error-card" style="display: none;">
+                    <h2>❌ Error</h2>
+                    <div id="errorContent"></div>
+                    <button onclick="resetForm()" class="btn-secondary">Try Again</button>
                 </div>
-
-                <div class="form-group">
-                    <label for="githubUsername">GitHub Username *</label>
-                    <input 
-                        type="text" 
-                        id="githubUsername" 
-                        name="githubUsername" 
-                        required
-                        placeholder="your-username"
-                    >
-                    <small>Your GitHub username</small>
-                </div>
-
-                <div class="form-group">
-                    <label for="githubPassword">GitHub Token/Password *</label>
-                    <input 
-                        type="password" 
-                        id="githubPassword" 
-                        name="githubPassword" 
-                        required
-                        placeholder="ghp_xxxxxxxxxxxx"
-                    >
-                    <small>GitHub Personal Access Token (recommended) or password</small>
-                </div>
-
-                <button type="submit" id="submitBtn" class="btn-primary">
-                    <span class="btn-text">Create Website</span>
-                    <span class="btn-loader" style="display: none;">⏳ Creating...</span>
-                </button>
-            </form>
-
-            <div id="result" class="result-card" style="display: none;">
-                <h2>✅ Success!</h2>
-                <div id="resultContent"></div>
-                <button onclick="resetForm()" class="btn-secondary">Create Another</button>
-            </div>
-
-            <div id="error" class="error-card" style="display: none;">
-                <h2>❌ Error</h2>
-                <div id="errorContent"></div>
-                <button onclick="resetForm()" class="btn-secondary">Try Again</button>
             </div>
         </main>
 
