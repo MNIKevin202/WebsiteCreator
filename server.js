@@ -318,8 +318,18 @@ app.get('/', (req, res) => {
 });
 
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server running on port ${PORT}`);
-  console.log(`Environment variables loaded from CapRover App Configs`);
+  console.log(`═══════════════════════════════════════════════════════`);
+  console.log(`🚀 Server is running!`);
+  console.log(`   Port: ${PORT}`);
+  console.log(`   Listening on: 0.0.0.0:${PORT}`);
+  console.log(`═══════════════════════════════════════════════════════`);
+  console.log(`📋 IMPORTANT: Set Container HTTP Port in CapRover!`);
+  console.log(`   1. Go to CapRover Dashboard → websitecreator app`);
+  console.log(`   2. Click "App Configs" tab`);
+  console.log(`   3. Scroll to "HTTP Settings"`);
+  console.log(`   4. Set "Container HTTP Port" to: ${PORT}`);
+  console.log(`   5. Click "Save & Update"`);
+  console.log(`═══════════════════════════════════════════════════════`);
   
   // Check if required environment variables are set
   const missingVars = [];
@@ -333,4 +343,5 @@ app.listen(PORT, '0.0.0.0', () => {
   } else {
     console.log(`✅ All required environment variables are set`);
   }
+  console.log(`═══════════════════════════════════════════════════════`);
 });
