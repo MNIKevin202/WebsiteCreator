@@ -996,11 +996,34 @@ footer {
     color: var(--text-muted);
 }
 
-.no-results-message {
-    text-align: center;
-    padding: 40px;
-    color: var(--text-secondary);
-    font-size: 1rem;
+/* Wizard Styles */
+.wizard-navigation {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 24px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border-color);
+}
+
+.wizard-step {
+    min-height: 300px;
+}
+
+.wizard-options button.active {
+    background: var(--primary-color) !important;
+    color: white !important;
+    border-color: var(--primary-color) !important;
+}
+
+.wizard-checkboxes label:hover {
+    border-color: var(--primary-color);
+    background: var(--card-hover);
+}
+
+.wizard-checkboxes input[type="checkbox"]:checked + span {
+    color: var(--primary-color);
+    font-weight: 600;
 }
 
 .manage-checkbox-wrapper {

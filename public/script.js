@@ -54,6 +54,8 @@ function showPage(pageName) {
     // Load data if needed
     if (pageName === 'manage') {
         loadManage();
+    } else if (pageName === 'wizard') {
+        initWizard();
     }
 }
 
@@ -1531,3 +1533,319 @@ document.addEventListener('keydown', function(event) {
         closeConfirmModal();
     }
 });
+
+// Wizard Functions
+let wizardData = {
+    isWebsite: null,
+    websiteName: '',
+    darkMode: null,
+    port: '',
+    varsOnCapRover: null,
+    selectedVars: [],
+    websiteDetails: ''
+};
+
+let currentWizardStep = 0;
+
+const wizardSteps = [
+    {
+        question: 'Is this a website?',
+        type: 'yesno',
+        key: 'isWebsite'
+    },
+    {
+        question: 'What is the name of the website?',
+        type: 'text',
+        key: 'websiteName',
+        placeholder: 'my-awesome-website',
+        pattern: '[a-z0-9\\-]+',
+        required: true
+    },
+    {
+        question: 'Do you want dark mode?',
+        type: 'yesno',
+        key: 'darkMode'
+    },
+    {
+        question: 'What is the port?',
+        type: 'number',
+        key: 'port',
+        placeholder: '3000',
+        min: 3000,
+        max: 65535
+    },
+    {
+        question: 'Are the variables stored on CapRover?',
+        type: 'yesno',
+        key: 'varsOnCapRover'
+    },
+    {
+        question: 'Check all of the variables used:',
+        type: 'checkboxes',
+        key: 'selectedVars',
+        options: [
+            'MONGO_URI',
+            'SHIPENGINE_API_KEY',
+            'AFTERSHIP_API_KEY',
+            'OPENAI_API_KEY',
+            'EBAY_APP_ID',
+            'EBAY_CERT_ID',
+            'EBAY_DEV_ID',
+            'SMTP_HOST',
+            'SMTP_PORT',
+            'SMTP_SECURE',
+            'SMTP_USER',
+            'SMTP_PASS',
+            'MAIL_FROM_NAME',
+            'MAIL_FROM_EMAIL',
+            'MAIL_PWRESET_NAME',
+            'MAIL_PWRESET_EMAIL',
+            'STAXXIO_SSO_SECRET'
+        ]
+    },
+    {
+        question: 'Details on the website:',
+        type: 'textarea',
+        key: 'websiteDetails',
+        placeholder: 'Describe the website functionality, features, and requirements...',
+        required: true
+    }
+];
+
+function initWizard() {
+    currentWizardStep = 0;
+    wizardData = {
+        isWebsite: null,
+        websiteName: '',
+        darkMode: null,
+        port: '',
+        varsOnCapRover: null,
+        selectedVars: [],
+        websiteDetails: ''
+    };
+    renderWizardStep();
+}
+
+function renderWizardStep() {
+    const wizardStepsEl = document.getElementById('wizardSteps');
+    const wizardNav = document.querySelector('.wizard-navigation');
+    const wizardResult = document.getElementById('wizardResult');
+    
+    if (currentWizardStep >= wizardSteps.length) {
+        // Show result
+        wizardStepsEl.style.display = 'none';
+        wizardNav.style.display = 'none';
+        wizardResult.style.display = 'block';
+        generateWizardMessage();
+        return;
+    }
+    
+    wizardStepsEl.style.display = 'block';
+    wizardNav.style.display = 'flex';
+    wizardResult.style.display = 'none';
+    
+    const step = wizardSteps[currentWizardStep];
+    let html = `
+        <div class="wizard-step">
+            <div class="wizard-progress" style="margin-bottom: 24px;">
+                <div style="color: var(--text-secondary); font-size: 0.9rem;">
+                    Step ${currentWizardStep + 1} of ${wizardSteps.length}
+                </div>
+                <div style="width: 100%; height: 4px; background: var(--bg-secondary); border-radius: 2px; margin-top: 8px;">
+                    <div style="width: ${((currentWizardStep + 1) / wizardSteps.length) * 100}%; height: 100%; background: var(--primary-color); border-radius: 2px; transition: width 0.3s;"></div>
+                </div>
+            </div>
+            <h3 style="margin-bottom: 24px; color: var(--text-primary);">${escapeHtml(step.question)}</h3>
+    `;
+    
+    if (step.type === 'yesno') {
+        const value = wizardData[step.key];
+        html += `
+            <div class="wizard-options" style="display: flex; gap: 16px; margin-bottom: 24px;">
+                <button 
+                    type="button" 
+                    onclick="setWizardValue('${step.key}', true)" 
+                    class="btn-secondary" 
+                    style="flex: 1; padding: 16px; font-size: 1rem; ${value === true ? 'background: var(--primary-color); color: white; border-color: var(--primary-color);' : ''}"
+                >
+                    Yes
+                </button>
+                <button 
+                    type="button" 
+                    onclick="setWizardValue('${step.key}', false)" 
+                    class="btn-secondary" 
+                    style="flex: 1; padding: 16px; font-size: 1rem; ${value === false ? 'background: var(--primary-color); color: white; border-color: var(--primary-color);' : ''}"
+                >
+                    No
+                </button>
+            </div>
+        `;
+    } else if (step.type === 'text') {
+        html += `
+            <div class="form-group">
+                <input 
+                    type="text" 
+                    id="wizardInput" 
+                    class="form-input" 
+                    placeholder="${step.placeholder || ''}"
+                    value="${escapeHtml(wizardData[step.key] || '')}"
+                    ${step.pattern ? `pattern="${step.pattern}"` : ''}
+                    ${step.required ? 'required' : ''}
+                    style="width: 100%; padding: 14px 18px; background: var(--bg-color); border: 2px solid var(--border-color); border-radius: 12px; color: var(--text-primary); font-size: 1rem;"
+                    onkeypress="if(event.key === 'Enter') wizardNext()"
+                >
+            </div>
+        `;
+    } else if (step.type === 'number') {
+        html += `
+            <div class="form-group">
+                <input 
+                    type="number" 
+                    id="wizardInput" 
+                    class="form-input" 
+                    placeholder="${step.placeholder || ''}"
+                    value="${wizardData[step.key] || ''}"
+                    min="${step.min || ''}"
+                    max="${step.max || ''}"
+                    style="width: 100%; padding: 14px 18px; background: var(--bg-color); border: 2px solid var(--border-color); border-radius: 12px; color: var(--text-primary); font-size: 1rem;"
+                    onkeypress="if(event.key === 'Enter') wizardNext()"
+                >
+            </div>
+        `;
+    } else if (step.type === 'checkboxes') {
+        html += '<div class="wizard-checkboxes" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; margin-bottom: 24px;">';
+        step.options.forEach(option => {
+            const isChecked = wizardData[step.key].includes(option);
+            html += `
+                <label class="checkbox-label" style="padding: 12px; background: var(--bg-secondary); border-radius: 8px; border: 2px solid ${isChecked ? 'var(--primary-color)' : 'var(--border-color)'}; cursor: pointer; transition: all 0.2s;">
+                    <input 
+                        type="checkbox" 
+                        value="${escapeHtml(option)}"
+                        ${isChecked ? 'checked' : ''}
+                        onchange="toggleWizardVar('${escapeHtml(option)}')"
+                        style="margin-right: 8px;"
+                    >
+                    <span>${escapeHtml(option)}</span>
+                </label>
+            `;
+        });
+        html += '</div>';
+    } else if (step.type === 'textarea') {
+        html += `
+            <div class="form-group">
+                <textarea 
+                    id="wizardInput" 
+                    class="form-input" 
+                    placeholder="${step.placeholder || ''}"
+                    ${step.required ? 'required' : ''}
+                    style="width: 100%; min-height: 200px; padding: 14px 18px; background: var(--bg-color); border: 2px solid var(--border-color); border-radius: 12px; color: var(--text-primary); font-size: 1rem; font-family: inherit; resize: vertical;"
+                >${escapeHtml(wizardData[step.key] || '')}</textarea>
+            </div>
+        `;
+    }
+    
+    html += '</div>';
+    wizardStepsEl.innerHTML = html;
+    
+    // Update navigation buttons
+    const prevBtn = document.getElementById('wizardPrevBtn');
+    const nextBtn = document.getElementById('wizardNextBtn');
+    if (prevBtn) prevBtn.style.display = currentWizardStep === 0 ? 'none' : 'inline-flex';
+    if (nextBtn) {
+        if (currentWizardStep === wizardSteps.length - 1) {
+            nextBtn.textContent = 'Generate Message →';
+        } else {
+            nextBtn.textContent = 'Next →';
+        }
+    }
+    
+    // Focus input if it exists
+    const input = document.getElementById('wizardInput');
+    if (input) {
+        setTimeout(() => input.focus(), 100);
+    }
+}
+
+function setWizardValue(key, value) {
+    wizardData[key] = value;
+    renderWizardStep();
+}
+
+function toggleWizardVar(varName) {
+    const index = wizardData.selectedVars.indexOf(varName);
+    if (index > -1) {
+        wizardData.selectedVars.splice(index, 1);
+    } else {
+        wizardData.selectedVars.push(varName);
+    }
+    renderWizardStep();
+}
+
+function wizardNext() {
+    const step = wizardSteps[currentWizardStep];
+    
+    // Validate current step
+    if (step.type === 'text' || step.type === 'number' || step.type === 'textarea') {
+        const input = document.getElementById('wizardInput');
+        if (!input) return;
+        
+        if (step.required && !input.value.trim()) {
+            showToast('Please fill in this field', 'warning');
+            input.focus();
+            return;
+        }
+        
+        if (step.pattern && input.value && !new RegExp(`^${step.pattern}$`).test(input.value)) {
+            showToast('Invalid format', 'warning');
+            input.focus();
+            return;
+        }
+        
+        wizardData[step.key] = input.value.trim();
+    } else if (step.type === 'yesno' && wizardData[step.key] === null) {
+        showToast('Please select an option', 'warning');
+        return;
+    }
+    
+    currentWizardStep++;
+    renderWizardStep();
+}
+
+function wizardPrevious() {
+    if (currentWizardStep > 0) {
+        currentWizardStep--;
+        renderWizardStep();
+    }
+}
+
+function generateWizardMessage() {
+    const message = `Create a ${wizardData.isWebsite ? 'website' : 'application'} called "${wizardData.websiteName}".
+
+${wizardData.darkMode ? 'Use dark mode styling.' : 'Use light mode styling.'}
+
+The application should run on port ${wizardData.port || '3000'}.
+
+${wizardData.varsOnCapRover ? 'Environment variables are stored on CapRover.' : 'Environment variables are stored locally.'}
+
+${wizardData.selectedVars.length > 0 ? `The following environment variables are used:\n${wizardData.selectedVars.map(v => `- ${v}`).join('\n')}` : 'No specific environment variables are required.'}
+
+Website Details:
+${wizardData.websiteDetails}
+
+Please create this ${wizardData.isWebsite ? 'website' : 'application'} with all the necessary files, including server setup, frontend, and any required configurations.`;
+
+    document.getElementById('wizardMessage').value = message;
+}
+
+function copyWizardMessage() {
+    const message = document.getElementById('wizardMessage').value;
+    navigator.clipboard.writeText(message).then(() => {
+        showToast('Message copied to clipboard!', 'success');
+    }).catch(() => {
+        showToast('Failed to copy message', 'error');
+    });
+}
+
+function resetWizard() {
+    initWizard();
+}

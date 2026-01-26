@@ -70,6 +70,9 @@
                     <button onclick="showPage('manage')" id="nav-manage" class="nav-btn">
                         Manage
                     </button>
+                    <button onclick="showPage('wizard')" id="nav-wizard" class="nav-btn">
+                        Wizard
+                    </button>
                 </nav>
 
                 <!-- Create Website Page -->
@@ -196,6 +199,34 @@
                     </div>
                     <div id="manageError" class="error-card" style="display: none;">
                         <div id="manageErrorContent"></div>
+                    </div>
+                </div>
+
+                <!-- Wizard Page -->
+                <div id="page-wizard" class="page-content" style="display: none;">
+                    <h2>Website Creation Wizard</h2>
+                    <div id="wizardContainer" class="form-card">
+                        <div id="wizardSteps"></div>
+                        <div class="wizard-navigation" style="display: none;">
+                            <button onclick="wizardPrevious()" id="wizardPrevBtn" class="btn-secondary" style="width: auto; margin-right: 12px;">
+                                ← Previous
+                            </button>
+                            <button onclick="wizardNext()" id="wizardNextBtn" class="btn-primary" style="width: auto;">
+                                Next →
+                            </button>
+                        </div>
+                        <div id="wizardResult" style="display: none;">
+                            <h3 style="margin-bottom: 16px;">Generated Cursor AI Message</h3>
+                            <div style="position: relative;">
+                                <textarea id="wizardMessage" readonly style="width: 100%; min-height: 400px; padding: 16px; background: var(--bg-color); border: 2px solid var(--border-color); border-radius: 8px; color: var(--text-primary); font-family: 'Courier New', monospace; font-size: 0.9rem; resize: vertical;"></textarea>
+                                <button onclick="copyWizardMessage()" class="btn-secondary" style="position: absolute; top: 12px; right: 12px; width: auto; padding: 8px 16px;">
+                                    📋 Copy Message
+                                </button>
+                            </div>
+                            <button onclick="resetWizard()" class="btn-primary" style="margin-top: 16px; width: auto;">
+                                Start Over
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
