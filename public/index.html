@@ -180,6 +180,18 @@
                                 Delete Selected (<span id="selectedTotalCount">0</span>)
                             </button>
                         </div>
+                        <!-- Tabs -->
+                        <div class="manage-tabs">
+                            <button onclick="switchManageTab('matched')" id="tab-matched" class="manage-tab active">
+                                Matched
+                            </button>
+                            <button onclick="switchManageTab('repos')" id="tab-repos" class="manage-tab">
+                                All Repos
+                            </button>
+                            <button onclick="switchManageTab('apps')" id="tab-apps" class="manage-tab">
+                                All CapRover Apps
+                            </button>
+                        </div>
                         <div id="manageContent"></div>
                     </div>
                     <div id="manageError" class="error-card" style="display: none;">

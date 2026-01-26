@@ -778,16 +778,90 @@ footer {
 
 .manage-item-single {
     grid-column: 1 / -1;
+    padding: 16px;
+    background: var(--bg-color);
+    border-radius: 12px;
+    margin-bottom: 12px;
+    border: 1px solid var(--border-color);
+    transition: all 0.2s;
+}
+
+.manage-item-single:hover {
+    border-color: var(--border-hover);
+    background: var(--bg-secondary);
+}
+
+.manage-item-single .manage-repo,
+.manage-item-single .manage-app {
+    padding: 0;
+    background: transparent;
+    border: none;
+    min-height: auto;
+}
+
+.manage-item-single .manage-repo:hover,
+.manage-item-single .manage-app:hover {
+    background: transparent;
+    border: none;
 }
 
 .manage-item-double {
     grid-column: span 2;
 }
 
-.manage-matched {
+/* Manage Tabs */
+.manage-tabs {
     display: flex;
-    flex-direction: column;
-    gap: 12px;
+    gap: 8px;
+    margin-bottom: 20px;
+    border-bottom: 2px solid var(--border-color);
+    padding-bottom: 0;
+}
+
+.manage-tab {
+    background: transparent;
+    border: none;
+    padding: 12px 24px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -2px;
+    transition: all 0.2s;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.manage-tab:hover {
+    color: var(--text-primary);
+    background: var(--bg-secondary);
+}
+
+.manage-tab.active {
+    color: var(--primary-color);
+    border-bottom-color: var(--primary-color);
+}
+
+/* Matched Item */
+.manage-matched-item {
+    padding: 16px;
+    background: var(--bg-color);
+    border-radius: 12px;
+    margin-bottom: 12px;
+    border: 1px solid var(--border-color);
+    transition: all 0.2s;
+}
+
+.manage-matched-item:hover {
+    border-color: var(--border-hover);
+    background: var(--bg-secondary);
+}
+
+.manage-matched-header-row {
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border-color);
 }
 
 .manage-matched-repo,
@@ -797,21 +871,18 @@ footer {
     border-radius: 8px;
     border: 1px solid var(--border-color);
     transition: all 0.2s;
+    margin-bottom: 8px;
+}
+
+.manage-matched-repo:last-child,
+.manage-matched-app:last-child {
+    margin-bottom: 0;
 }
 
 .manage-matched-repo:hover,
 .manage-matched-app:hover {
     border-color: var(--border-hover);
     background: var(--card-hover);
-}
-
-.manage-matched-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 8px;
-    gap: 8px;
-    flex-wrap: wrap;
 }
 
 .manage-repo,

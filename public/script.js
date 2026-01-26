@@ -58,6 +58,173 @@ function showPage(pageName) {
 }
 
 // Load and match repositories with apps
+// Store manage data globally so tabs can access it
+let manageData = {
+    matched: [],
+    repos: [],
+    apps: [],
+    unmatchedRepos: [],
+    unmatchedApps: []
+};
+
+let currentManageTab = 'matched';
+
+// Switch between manage tabs
+function switchManageTab(tab) {
+    currentManageTab = tab;
+    
+    // Update tab buttons
+    document.querySelectorAll('.manage-tab').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    document.getElementById(`tab-${tab}`).classList.add('active');
+    
+    // Render the appropriate content
+    renderManageTab(tab);
+}
+
+// Render content for the active tab
+function renderManageTab(tab) {
+    const manageContent = document.getElementById('manageContent');
+    let html = '';
+    
+    if (tab === 'matched') {
+        // Render matched pairs
+        if (manageData.matched.length === 0) {
+            html = '<div class="empty-state"><p>No matched repositories and apps found.</p></div>';
+        } else {
+            manageData.matched.forEach(({ repo, app, name }) => {
+                html += `
+                    <div class="manage-matched-item">
+                        <div class="manage-matched-header-row">
+                            <label class="checkbox-label">
+                                <input type="checkbox" class="matched-pair-checkbox" data-repo="${repo.name}" data-app="${app.appName}" onchange="toggleMatchedPair('${repo.name}', '${app.appName}', this.checked)">
+                                <span style="font-weight: 600; color: var(--primary-color);">Select Both</span>
+                            </label>
+                        </div>
+                        <div class="manage-matched-repo">
+                            <div class="manage-matched-header">
+                                <div class="manage-checkbox-wrapper">
+                                    <input type="checkbox" class="repo-checkbox" value="${repo.name}" onchange="updateMatchedPairCheckbox('${repo.name}', '${app.appName}'); updateSelectedManageCount()">
+                                    <span class="manage-repo-name">${escapeHtml(repo.name)}</span>
+                                </div>
+                                <button onclick="deleteRepo('${repo.name}')" class="btn-danger" style="width: auto; padding: 6px 12px; font-size: 0.85rem;">
+                                    Delete
+                                </button>
+                            </div>
+                            <div class="manage-repo-url">
+                                <a href="${repo.html_url}" target="_blank">${repo.html_url}</a>
+                            </div>
+                        </div>
+                        <div class="manage-matched-app">
+                            <div class="manage-matched-header">
+                                <div class="manage-checkbox-wrapper">
+                                    <input type="checkbox" class="app-checkbox" value="${app.appName}" onchange="updateMatchedPairCheckbox('${repo.name}', '${app.appName}'); updateSelectedManageCount()">
+                                    <span class="manage-app-name">${escapeHtml(app.appName)}</span>
+                                </div>
+                                <div style="display: flex; gap: 4px; align-items: center; flex-wrap: wrap;">
+                                    <a href="https://captain.kpanel.xyz/#/apps/details/${escapeHtml(app.appName)}" target="_blank" class="manage-app-link" title="Open in CapRover">
+                                        🔗 CapRover
+                                    </a>
+                                    <button onclick="deleteApp('${app.appName}')" class="btn-danger" style="width: auto; padding: 6px 12px; font-size: 0.85rem;">
+                                        Delete
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="manage-app-info">
+                                Port: ${app.containerHttpPort || 'N/A'} | Instances: ${app.instanceCount || 1}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+    } else if (tab === 'repos') {
+        // Render all repos
+        if (manageData.repos.length === 0) {
+            html = '<div class="empty-state"><p>No repositories found.</p></div>';
+        } else {
+            manageData.repos.forEach(repo => {
+                html += `
+                    <div class="manage-item-single">
+                        <div class="manage-repo">
+                            <div class="manage-repo-header">
+                                <div class="manage-checkbox-wrapper">
+                                    <input type="checkbox" class="repo-checkbox" value="${repo.name}" onchange="updateSelectedManageCount()">
+                                    <span class="manage-repo-name">${escapeHtml(repo.name)}</span>
+                                </div>
+                                <button onclick="deleteRepo('${repo.name}')" class="btn-danger" style="width: auto; padding: 6px 12px; font-size: 0.85rem;">
+                                    Delete
+                                </button>
+                            </div>
+                            <div class="manage-repo-url">
+                                <a href="${repo.html_url}" target="_blank">${repo.html_url}</a>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+    } else if (tab === 'apps') {
+        // Render all apps
+        if (manageData.apps.length === 0) {
+            html = '<div class="empty-state"><p>No CapRover apps found.</p></div>';
+        } else {
+            manageData.apps.forEach(app => {
+                html += `
+                    <div class="manage-item-single">
+                        <div class="manage-app">
+                            <div class="manage-app-header">
+                                <div class="manage-checkbox-wrapper">
+                                    <input type="checkbox" class="app-checkbox" value="${app.appName}" onchange="updateSelectedManageCount()">
+                                    <span class="manage-app-name">${escapeHtml(app.appName)}</span>
+                                </div>
+                                <div style="display: flex; gap: 4px; align-items: center; flex-wrap: wrap;">
+                                    <a href="https://captain.kpanel.xyz/#/apps/details/${escapeHtml(app.appName)}" target="_blank" class="manage-app-link" title="Open in CapRover">
+                                        🔗 CapRover
+                                    </a>
+                                    <button onclick="deleteApp('${app.appName}')" class="btn-danger" style="width: auto; padding: 6px 12px; font-size: 0.85rem;">
+                                        Delete
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="manage-app-info">
+                                Port: ${app.containerHttpPort || 'N/A'} | Instances: ${app.instanceCount || 1}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+    }
+    
+    manageContent.innerHTML = html;
+    updateSelectedManageCount();
+}
+
+// Toggle matched pair checkbox (selects both repo and app)
+function toggleMatchedPair(repoName, appName, checked) {
+    const repoCheckbox = document.querySelector(`.repo-checkbox[value="${repoName}"]`);
+    const appCheckbox = document.querySelector(`.app-checkbox[value="${appName}"]`);
+    
+    if (repoCheckbox) repoCheckbox.checked = checked;
+    if (appCheckbox) appCheckbox.checked = checked;
+    
+    updateSelectedManageCount();
+}
+
+// Update matched pair checkbox based on individual checkboxes
+function updateMatchedPairCheckbox(repoName, appName) {
+    const repoCheckbox = document.querySelector(`.repo-checkbox[value="${repoName}"]`);
+    const appCheckbox = document.querySelector(`.app-checkbox[value="${appName}"]`);
+    const pairCheckbox = document.querySelector(`.matched-pair-checkbox[data-repo="${repoName}"][data-app="${appName}"]`);
+    
+    if (repoCheckbox && appCheckbox && pairCheckbox) {
+        pairCheckbox.checked = repoCheckbox.checked && appCheckbox.checked;
+        pairCheckbox.indeterminate = (repoCheckbox.checked || appCheckbox.checked) && !(repoCheckbox.checked && appCheckbox.checked);
+    }
+}
+
 async function loadManage() {
     const manageLoading = document.getElementById('manageLoading');
     const manageList = document.getElementById('manageList');
@@ -126,132 +293,27 @@ async function loadManage() {
         // Sort matched by name
         matched.sort((a, b) => a.name.localeCompare(b.name));
         
+        // Sort repos and apps alphabetically
+        repos.sort((a, b) => a.name.localeCompare(b.name));
+        apps.sort((a, b) => a.appName.localeCompare(b.appName));
+        
+        // Store data globally
+        manageData = {
+            matched: matched,
+            repos: repos,
+            apps: apps,
+            unmatchedRepos: unmatchedRepos,
+            unmatchedApps: unmatchedApps
+        };
+        
         if (matched.length === 0 && unmatchedRepos.length === 0 && unmatchedApps.length === 0) {
             manageContent.innerHTML = '<div class="empty-state"><p>No repositories or apps found.</p></div>';
             manageList.style.display = 'block';
             return;
         }
         
-        let html = '';
-        
-        // Add column headers
-        html += `
-            <div class="manage-item" style="background: transparent; border: none; padding: 0 16px 8px;">
-                <div class="manage-column-header">Matched</div>
-                <div class="manage-column-header">All Repos</div>
-                <div class="manage-column-header">All CapRover Apps</div>
-            </div>
-        `;
-        
-        // Sort repos and apps alphabetically for consistent display
-        repos.sort((a, b) => a.name.localeCompare(b.name));
-        apps.sort((a, b) => a.appName.localeCompare(b.appName));
-        
-        // Get the maximum length to iterate (max of matched pairs, repos, or apps)
-        const maxLength = Math.max(matched.length, repos.length, apps.length);
-        
-        for (let i = 0; i < maxLength; i++) {
-            html += '<div class="manage-item">';
-            
-            // Column 1: Matched pairs (repo + app)
-            if (i < matched.length) {
-                const { repo, app } = matched[i];
-                html += `
-                    <div class="manage-matched">
-                        <div class="manage-matched-repo">
-                            <div class="manage-matched-header">
-                                <div class="manage-checkbox-wrapper">
-                                    <input type="checkbox" class="repo-checkbox" value="${repo.name}" onchange="updateSelectedManageCount()">
-                                    <span class="manage-repo-name">${escapeHtml(repo.name)}</span>
-                                </div>
-                                <button onclick="deleteRepo('${repo.name}')" class="btn-danger" style="width: auto; padding: 6px 12px; font-size: 0.85rem;">
-                                    Delete
-                                </button>
-                            </div>
-                            <div class="manage-repo-url">
-                                <a href="${repo.html_url}" target="_blank">${repo.html_url}</a>
-                            </div>
-                        </div>
-                        <div class="manage-matched-app">
-                            <div class="manage-matched-header">
-                                <div class="manage-checkbox-wrapper">
-                                    <input type="checkbox" class="app-checkbox" value="${app.appName}" onchange="updateSelectedManageCount()">
-                                    <span class="manage-app-name">${escapeHtml(app.appName)}</span>
-                                </div>
-                                <div style="display: flex; gap: 4px; align-items: center; flex-wrap: wrap;">
-                                    <a href="https://captain.kpanel.xyz/#/apps/details/${escapeHtml(app.appName)}" target="_blank" class="manage-app-link" title="Open in CapRover">
-                                        🔗 CapRover
-                                    </a>
-                                    <button onclick="deleteApp('${app.appName}')" class="btn-danger" style="width: auto; padding: 6px 12px; font-size: 0.85rem;">
-                                        Delete
-                                    </button>
-                                </div>
-                            </div>
-                            <div class="manage-app-info">
-                                Port: ${app.containerHttpPort || 'N/A'} | Instances: ${app.instanceCount || 1}
-                            </div>
-                        </div>
-                    </div>
-                `;
-            } else {
-                html += '<div class="manage-matched"></div>';
-            }
-            
-            // Column 2: All Repos
-            if (i < repos.length) {
-                const repo = repos[i];
-                html += `
-                    <div class="manage-repo">
-                        <div class="manage-repo-header">
-                            <div class="manage-checkbox-wrapper">
-                                <input type="checkbox" class="repo-checkbox" value="${repo.name}" onchange="updateSelectedManageCount()">
-                                <span class="manage-repo-name">${escapeHtml(repo.name)}</span>
-                            </div>
-                            <button onclick="deleteRepo('${repo.name}')" class="btn-danger" style="width: auto; padding: 6px 12px; font-size: 0.85rem;">
-                                Delete
-                            </button>
-                        </div>
-                        <div class="manage-repo-url">
-                            <a href="${repo.html_url}" target="_blank">${repo.html_url}</a>
-                        </div>
-                    </div>
-                `;
-            } else {
-                html += '<div class="manage-repo"></div>';
-            }
-            
-            // Column 3: All CapRover Apps
-            if (i < apps.length) {
-                const app = apps[i];
-                html += `
-                    <div class="manage-app">
-                        <div class="manage-app-header">
-                            <div class="manage-checkbox-wrapper">
-                                <input type="checkbox" class="app-checkbox" value="${app.appName}" onchange="updateSelectedManageCount()">
-                                <span class="manage-app-name">${escapeHtml(app.appName)}</span>
-                            </div>
-                            <div style="display: flex; gap: 4px; align-items: center; flex-wrap: wrap;">
-                                <a href="https://captain.kpanel.xyz/#/apps/details/${escapeHtml(app.appName)}" target="_blank" class="manage-app-link" title="Open in CapRover">
-                                    🔗 CapRover
-                                </a>
-                                <button onclick="deleteApp('${app.appName}')" class="btn-danger" style="width: auto; padding: 6px 12px; font-size: 0.85rem;">
-                                    Delete
-                                </button>
-                            </div>
-                        </div>
-                        <div class="manage-app-info">
-                            Port: ${app.containerHttpPort || 'N/A'} | Instances: ${app.instanceCount || 1}
-                        </div>
-                    </div>
-                `;
-            } else {
-                html += '<div class="manage-app"></div>';
-            }
-            
-            html += '</div>';
-        }
-        
-        manageContent.innerHTML = html;
+        // Render the initial tab
+        renderManageTab(currentManageTab);
         manageList.style.display = 'block';
         
     } catch (error) {
@@ -266,10 +328,25 @@ function toggleSelectAllManage() {
     const selectAll = document.getElementById('selectAllManage').checked;
     const repoCheckboxes = document.querySelectorAll('.repo-checkbox');
     const appCheckboxes = document.querySelectorAll('.app-checkbox');
+    const matchedPairCheckboxes = document.querySelectorAll('.matched-pair-checkbox');
     
     [...repoCheckboxes, ...appCheckboxes].forEach(checkbox => {
         checkbox.checked = selectAll;
     });
+    
+    // Update matched pair checkboxes
+    matchedPairCheckboxes.forEach(pairCheckbox => {
+        const repoName = pairCheckbox.getAttribute('data-repo');
+        const appName = pairCheckbox.getAttribute('data-app');
+        const repoCheckbox = document.querySelector(`.repo-checkbox[value="${repoName}"]`);
+        const appCheckbox = document.querySelector(`.app-checkbox[value="${appName}"]`);
+        
+        if (repoCheckbox && appCheckbox) {
+            pairCheckbox.checked = selectAll;
+            pairCheckbox.indeterminate = false;
+        }
+    });
+    
     updateSelectedManageCount();
 }
 
@@ -285,6 +362,20 @@ function updateSelectedManageCount() {
     
     document.getElementById('selectedTotalCount').textContent = totalSelected;
     document.getElementById('bulkDeleteAllBtn').disabled = totalSelected === 0;
+    
+    // Update matched pair checkboxes
+    const matchedPairCheckboxes = document.querySelectorAll('.matched-pair-checkbox');
+    matchedPairCheckboxes.forEach(pairCheckbox => {
+        const repoName = pairCheckbox.getAttribute('data-repo');
+        const appName = pairCheckbox.getAttribute('data-app');
+        const repoCheckbox = document.querySelector(`.repo-checkbox[value="${repoName}"]`);
+        const appCheckbox = document.querySelector(`.app-checkbox[value="${appName}"]`);
+        
+        if (repoCheckbox && appCheckbox) {
+            pairCheckbox.checked = repoCheckbox.checked && appCheckbox.checked;
+            pairCheckbox.indeterminate = (repoCheckbox.checked || appCheckbox.checked) && !(repoCheckbox.checked && appCheckbox.checked);
+        }
+    });
     
     // Update select all checkbox state
     const selectAll = document.getElementById('selectAllManage');
