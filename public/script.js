@@ -5,6 +5,90 @@ const errorCard = document.getElementById('error');
 const resultContent = document.getElementById('resultContent');
 const errorContent = document.getElementById('errorContent');
 
+// Admin form elements
+const adminFormCard = document.getElementById('adminFormCard');
+const adminForm = document.getElementById('adminForm');
+const adminSubmitBtn = document.getElementById('adminSubmitBtn');
+const adminError = document.getElementById('adminError');
+const adminErrorContent = document.getElementById('adminErrorContent');
+
+// Check if admin exists on page load
+async function checkAdminExists() {
+    try {
+        const response = await fetch('/api/check-admin');
+        const data = await response.json();
+        
+        if (!data.mongoConfigured) {
+            console.warn('MongoDB not configured');
+            adminFormCard.style.display = 'none';
+            return;
+        }
+        
+        if (!data.adminExists) {
+            // Show admin creation form
+            adminFormCard.style.display = 'block';
+            form.style.display = 'none';
+        } else {
+            // Show main form
+            adminFormCard.style.display = 'none';
+            form.style.display = 'block';
+        }
+    } catch (error) {
+        console.error('Error checking admin:', error);
+        // Show main form if check fails
+        adminFormCard.style.display = 'none';
+        form.style.display = 'block';
+    }
+}
+
+// Admin form submission
+adminForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    adminError.style.display = 'none';
+    adminSubmitBtn.disabled = true;
+    const btnText = adminSubmitBtn.querySelector('.btn-text');
+    const btnLoader = adminSubmitBtn.querySelector('.btn-loader');
+    btnText.style.display = 'none';
+    btnLoader.style.display = 'inline-block';
+    
+    const formData = {
+        username: document.getElementById('adminUsername').value.trim(),
+        password: document.getElementById('adminPassword').value.trim()
+    };
+    
+    try {
+        const response = await fetch('/api/create-admin', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(formData)
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            // Hide admin form and show main form
+            adminFormCard.style.display = 'none';
+            form.style.display = 'block';
+            alert('Admin account created successfully!');
+        } else {
+            throw new Error(data.error || 'Failed to create admin account');
+        }
+    } catch (error) {
+        adminErrorContent.textContent = error.message || 'Failed to create admin account. Please try again.';
+        adminError.style.display = 'block';
+    } finally {
+        adminSubmitBtn.disabled = false;
+        btnText.style.display = 'inline-block';
+        btnLoader.style.display = 'none';
+    }
+});
+
+// Check admin on page load
+checkAdminExists();
+
 form.addEventListener('submit', async (e) => {
     e.preventDefault();
     

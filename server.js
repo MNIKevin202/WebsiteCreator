@@ -2,6 +2,8 @@ const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const axios = require('axios');
+const mongoose = require('mongoose');
+const bcrypt = require('bcryptjs');
 
 // Load .env file only in local development (not in CapRover)
 // CapRover provides environment variables directly
@@ -51,6 +53,39 @@ const CAPROVER_URL = process.env.CAPROVER_URL; // e.g., https://captain.yourdoma
 const CAPROVER_PASSWORD = process.env.CAPROVER_PASSWORD;
 const GITHUB_USERNAME = process.env.GITHUB_USERNAME;
 const GITHUB_PASSWORD = process.env.GITHUB_PASSWORD; // Personal Access Token or password
+const MONGO_URI = process.env.MONGO_URI;
+
+// MongoDB connection
+if (MONGO_URI) {
+  mongoose.connect(MONGO_URI, {
+    dbName: 'WebsiteCreator'
+  }).then(() => {
+    console.log(`[${new Date().toISOString()}] ✅ Connected to MongoDB - Database: WebsiteCreator`);
+  }).catch((error) => {
+    console.error(`[${new Date().toISOString()}] ❌ MongoDB connection error:`, error.message);
+  });
+} else {
+  console.warn(`[${new Date().toISOString()}] ⚠️  MONGO_URI not set - MongoDB features will be disabled`);
+}
+
+// Admin schema
+const adminSchema = new mongoose.Schema({
+  username: {
+    type: String,
+    required: true,
+    unique: true
+  },
+  password: {
+    type: String,
+    required: true
+  },
+  createdAt: {
+    type: Date,
+    default: Date.now
+  }
+});
+
+const Admin = mongoose.model('adminLogin', adminSchema, 'adminLogin');
 
 // GitHub API helper
 const githubAPI = axios.create({
@@ -259,6 +294,85 @@ async function configureCapRoverApp(appName, repoUrl, branch, username, password
   }
 }
 
+// Admin creation endpoint
+app.post('/api/create-admin', async (req, res) => {
+  const requestId = Date.now();
+  console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] POST /api/create-admin`);
+  
+  try {
+    const { username, password } = req.body;
+    
+    if (!username || !password) {
+      console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Validation failed: Username or password missing`);
+      return res.status(400).json({ error: 'Username and password are required' });
+    }
+    
+    if (password.length < 6) {
+      console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Validation failed: Password too short`);
+      return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    }
+    
+    // Check if admin already exists
+    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Checking if admin already exists...`);
+    const existingAdmin = await Admin.findOne();
+    
+    if (existingAdmin) {
+      console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Admin already exists, creation denied`);
+      return res.status(403).json({ 
+        error: 'Admin account already exists. Only one admin account is allowed.' 
+      });
+    }
+    
+    // Hash password
+    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Hashing password...`);
+    const hashedPassword = await bcrypt.hash(password, 10);
+    
+    // Create admin
+    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Creating admin account...`);
+    const admin = new Admin({
+      username: username,
+      password: hashedPassword
+    });
+    
+    await admin.save();
+    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] ✅ Admin account created successfully`);
+    
+    res.json({
+      success: true,
+      message: 'Admin account created successfully!'
+    });
+    
+  } catch (error) {
+    console.error(`[${new Date().toISOString()}] [REQUEST ${requestId}] ❌ Error creating admin:`, error);
+    
+    if (error.code === 11000) {
+      return res.status(403).json({ 
+        error: 'Admin account already exists. Only one admin account is allowed.' 
+      });
+    }
+    
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to create admin account'
+    });
+  }
+});
+
+// Check if admin exists endpoint
+app.get('/api/check-admin', async (req, res) => {
+  try {
+    const admin = await Admin.findOne();
+    res.json({
+      adminExists: !!admin
+    });
+  } catch (error) {
+    console.error(`[${new Date().toISOString()}] Error checking admin:`, error);
+    res.status(500).json({
+      error: 'Failed to check admin status'
+    });
+  }
+});
+
 // Main endpoint to create everything
 app.post('/api/create-website', async (req, res) => {
   try {
@@ -326,19 +440,6 @@ app.post('/api/create-website', async (req, res) => {
       error: error.message || 'Failed to create website'
     });
   }
-});
-
-// Test endpoint to verify routing is working
-app.get('/test', (req, res) => {
-  console.log(`[${new Date().toISOString()}] Test endpoint hit!`);
-  res.json({
-    success: true,
-    message: 'Server is reachable!',
-    timestamp: new Date().toISOString(),
-    port: PORT,
-    serverAddress: server.address(),
-    headers: req.headers
-  });
 });
 
 // Test endpoint to verify routing is working
