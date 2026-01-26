@@ -814,12 +814,6 @@ function showToast(message, type = 'info', duration = 5000) {
     }, duration);
 }
 
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
-
 // Close modal when clicking outside
 window.onclick = function(event) {
     const errorModal = document.getElementById('errorModal');
