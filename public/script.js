@@ -1558,7 +1558,6 @@ const wizardSteps = [
         type: 'text',
         key: 'websiteName',
         placeholder: 'my-awesome-website',
-        pattern: '[a-z0-9\\-]+',
         required: true
     },
     {
@@ -1795,6 +1794,7 @@ function wizardNext() {
             return;
         }
         
+        // Only validate pattern if it exists and value is provided
         if (step.pattern && input.value && !new RegExp(`^${step.pattern}$`).test(input.value)) {
             showToast('Invalid format', 'warning');
             input.focus();
