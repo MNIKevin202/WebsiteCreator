@@ -1878,6 +1878,8 @@ function generateWizardMessage() {
         message += `GitHub Repository: ${wizardData.githubRepo}\n\n`;
     }
 
+    message += `This application will be hosted on CapRover. Make sure to include all necessary files for CapRover deployment, including a Dockerfile and captain-definition file.\n\n`;
+
     message += `${wizardData.darkMode ? 'Use dark mode styling.' : 'Use light mode styling.'}\n\n`;
 
     message += `The application should run on port ${wizardData.port || '3000'}.\n\n`;
@@ -1891,6 +1893,8 @@ function generateWizardMessage() {
     }
 
     message += `Website Details:\n${wizardData.websiteDetails}\n\n`;
+
+    message += `Important: This application needs to run npm install during the build process. Make sure the Dockerfile includes npm install commands.\n\n`;
 
     message += `Please create this ${wizardData.isWebsite ? 'website' : 'application'} with all the necessary files, including server setup, frontend, and any required configurations.`;
 
