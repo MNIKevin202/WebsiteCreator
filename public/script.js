@@ -1538,6 +1538,7 @@ document.addEventListener('keydown', function(event) {
 let wizardData = {
     isWebsite: null,
     websiteName: '',
+    githubRepo: '',
     darkMode: null,
     port: '',
     varsOnCapRover: null,
@@ -1546,6 +1547,7 @@ let wizardData = {
 };
 
 let currentWizardStep = 0;
+let wizardRepos = [];
 
 const wizardSteps = [
     {
@@ -1559,6 +1561,13 @@ const wizardSteps = [
         key: 'websiteName',
         placeholder: 'my-awesome-website',
         required: true
+    },
+    {
+        question: 'Select GitHub repository:',
+        type: 'select',
+        key: 'githubRepo',
+        options: [], // Will be populated dynamically
+        required: false
     },
     {
         question: 'Do you want dark mode?',
@@ -1611,17 +1620,40 @@ const wizardSteps = [
     }
 ];
 
-function initWizard() {
+async function initWizard() {
     currentWizardStep = 0;
     wizardData = {
         isWebsite: null,
         websiteName: '',
+        githubRepo: '',
         darkMode: null,
         port: '',
         varsOnCapRover: null,
         selectedVars: [],
         websiteDetails: ''
     };
+    
+    // Load GitHub repos for the dropdown
+    try {
+        const reposResponse = await fetch('/api/repos', { credentials: 'include' });
+        if (reposResponse.ok) {
+            const reposData = await reposResponse.json();
+            if (reposData.success) {
+                wizardRepos = reposData.repos || [];
+                // Update the select step options
+                const selectStep = wizardSteps.find(s => s.type === 'select');
+                if (selectStep) {
+                    selectStep.options = wizardRepos.map(repo => ({
+                        value: repo.html_url,
+                        label: `${repo.name} (${repo.html_url})`
+                    }));
+                }
+            }
+        }
+    } catch (error) {
+        console.error('Failed to load repos for wizard:', error);
+    }
+    
     renderWizardStep();
 }
 
@@ -1711,6 +1743,27 @@ function renderWizardStep() {
                 >
             </div>
         `;
+    } else if (step.type === 'select') {
+        html += `
+            <div class="form-group">
+                <select 
+                    id="wizardInput" 
+                    class="form-input" 
+                    style="width: 100%; padding: 14px 18px; background: var(--bg-color); border: 2px solid var(--border-color); border-radius: 12px; color: var(--text-primary); font-size: 1rem; cursor: pointer;"
+                    ${step.required ? 'required' : ''}
+                >
+                    <option value="">-- Select a repository (optional) --</option>
+                    ${step.options.map(opt => `
+                        <option value="${escapeHtml(opt.value)}" ${wizardData[step.key] === opt.value ? 'selected' : ''}>
+                            ${escapeHtml(opt.label)}
+                        </option>
+                    `).join('')}
+                </select>
+                <small style="display: block; margin-top: 8px; color: var(--text-secondary);">
+                    Select a GitHub repository to include in the Cursor AI message
+                </small>
+            </div>
+        `;
     } else if (step.type === 'checkboxes') {
         html += '<div class="wizard-checkboxes" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; margin-bottom: 24px;">';
         step.options.forEach(option => {
@@ -1784,7 +1837,7 @@ function wizardNext() {
     const step = wizardSteps[currentWizardStep];
     
     // Validate current step
-    if (step.type === 'text' || step.type === 'number' || step.type === 'textarea') {
+    if (step.type === 'text' || step.type === 'number' || step.type === 'textarea' || step.type === 'select') {
         const input = document.getElementById('wizardInput');
         if (!input) return;
         
@@ -1819,20 +1872,27 @@ function wizardPrevious() {
 }
 
 function generateWizardMessage() {
-    const message = `Create a ${wizardData.isWebsite ? 'website' : 'application'} called "${wizardData.websiteName}".
+    let message = `Create a ${wizardData.isWebsite ? 'website' : 'application'} called "${wizardData.websiteName}".\n\n`;
 
-${wizardData.darkMode ? 'Use dark mode styling.' : 'Use light mode styling.'}
+    if (wizardData.githubRepo) {
+        message += `GitHub Repository: ${wizardData.githubRepo}\n\n`;
+    }
 
-The application should run on port ${wizardData.port || '3000'}.
+    message += `${wizardData.darkMode ? 'Use dark mode styling.' : 'Use light mode styling.'}\n\n`;
 
-${wizardData.varsOnCapRover ? 'Environment variables are stored on CapRover.' : 'Environment variables are stored locally.'}
+    message += `The application should run on port ${wizardData.port || '3000'}.\n\n`;
 
-${wizardData.selectedVars.length > 0 ? `The following environment variables are used:\n${wizardData.selectedVars.map(v => `- ${v}`).join('\n')}` : 'No specific environment variables are required.'}
+    message += `${wizardData.varsOnCapRover ? 'Environment variables are stored on CapRover.' : 'Environment variables are stored locally.'}\n\n`;
 
-Website Details:
-${wizardData.websiteDetails}
+    if (wizardData.selectedVars.length > 0) {
+        message += `The following environment variables are used:\n${wizardData.selectedVars.map(v => `- ${v}`).join('\n')}\n\n`;
+    } else {
+        message += `No specific environment variables are required.\n\n`;
+    }
 
-Please create this ${wizardData.isWebsite ? 'website' : 'application'} with all the necessary files, including server setup, frontend, and any required configurations.`;
+    message += `Website Details:\n${wizardData.websiteDetails}\n\n`;
+
+    message += `Please create this ${wizardData.isWebsite ? 'website' : 'application'} with all the necessary files, including server setup, frontend, and any required configurations.`;
 
     document.getElementById('wizardMessage').value = message;
 }
