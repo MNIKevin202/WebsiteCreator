@@ -622,13 +622,34 @@ form.addEventListener('submit', async (e) => {
             // Add DNS instructions if domain was provided
             if (formData.isDomain && formData.domain) {
                 const hostingerUrl = `https://hpanel.hostinger.com/domain/${formData.domain}/dns?tab=dns_records`;
+                const fillScript = `
+// Copy and paste this into the browser console on Hostinger DNS page:
+(function() {
+    const pointsToField = document.getElementById('hdomains_dns_create_record_pointsTo');
+    const ttlField = document.getElementById('hdomains_dns_create_record_ttl');
+    if (pointsToField) {
+        pointsToField.value = '46.202.178.170';
+        pointsToField.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    if (ttlField) {
+        ttlField.value = '60';
+        ttlField.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    if (pointsToField && ttlField) {
+        alert('Fields filled! Type: A, Name: @, Points to: 46.202.178.170, TTL: 60');
+    } else {
+        alert('Fields not found. Make sure you are on the DNS records page.');
+    }
+})();
+                `.trim();
+                
                 resultHtml += `
                     <div class="result-item" style="flex-direction: column; align-items: flex-start; gap: 12px; margin-top: 16px; padding: 20px; background: var(--bg-secondary); border: 2px solid var(--primary-color);">
                         <strong style="color: var(--primary-color); font-size: 1.1rem;">🌐 DNS Configuration Required</strong>
                         <p style="margin: 0; color: var(--text-secondary);">
                             To complete the setup, you need to add an A record for your domain <strong>${escapeHtml(formData.domain)}</strong>:
                         </p>
-                        <div style="background: var(--bg-color); padding: 12px; border-radius: 8px; width: 100%; font-family: monospace; font-size: 0.9rem;">
+                        <div style="background: var(--bg-color); padding: 12px; border-radius: 8px; width: 100%; font-family: monospace; font-size: 0.9rem; border: 1px solid var(--border-color);">
                             <div><strong>Type:</strong> A</div>
                             <div><strong>Name:</strong> @</div>
                             <div><strong>Points to:</strong> 46.202.178.170</div>
@@ -637,8 +658,16 @@ form.addEventListener('submit', async (e) => {
                         <a href="${hostingerUrl}" target="_blank" class="modal-link-btn" style="margin-top: 8px;">
                             Open Hostinger DNS Settings
                         </a>
+                        <div style="margin-top: 12px; padding: 12px; background: var(--bg-color); border-radius: 8px; width: 100%; border: 1px solid var(--border-color);">
+                            <strong style="color: var(--text-primary); font-size: 0.9rem; display: block; margin-bottom: 8px;">⚡ Auto-Fill Script:</strong>
+                            <p style="margin: 0 0 8px 0; color: var(--text-secondary); font-size: 0.85rem;">
+                                After opening Hostinger DNS page, copy and paste this script into the browser console (F12) to auto-fill the fields:
+                            </p>
+                            <pre style="background: var(--card-bg); padding: 10px; border-radius: 6px; overflow-x: auto; font-size: 0.8rem; margin: 0; border: 1px solid var(--border-color); cursor: pointer;" onclick="navigator.clipboard.writeText(this.textContent).then(() => { this.style.borderColor='var(--success-color)'; setTimeout(() => this.style.borderColor='var(--border-color)', 2000); })" title="Click to copy">${escapeHtml(fillScript)}</pre>
+                            <small style="color: var(--text-muted); margin-top: 4px; display: block;">Click the code block above to copy the script</small>
+                        </div>
                         <small style="color: var(--text-muted); margin-top: 8px;">
-                            Click the button above to open your Hostinger DNS management page. Add a new A record with the values shown above.
+                            Or manually fill: Type=A, Name=@, Points to=46.202.178.170, TTL=60
                         </small>
                     </div>
                 `;
