@@ -454,7 +454,10 @@ const server = app.listen(PORT, '0.0.0.0', () => {
   }
   console.log(`═══════════════════════════════════════════════════════`);
   console.log(`📡 Server is ready to accept connections`);
-  console.log(`   Health check: http://0.0.0.0:${PORT}/api/health`);
+  console.log(`   Internal address: http://0.0.0.0:${PORT}`);
+  console.log(`   Public domain: https://websitecreator.kpanel.xyz`);
+  console.log(`   Health check: https://websitecreator.kpanel.xyz/api/health`);
+  console.log(`   Test endpoint: https://websitecreator.kpanel.xyz/test`);
   console.log(`═══════════════════════════════════════════════════════`);
 });
 
