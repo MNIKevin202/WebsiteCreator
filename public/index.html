@@ -62,52 +62,96 @@
                     </button>
                 </div>
 
-                <form id="createForm" class="form-card">
-                    <div class="form-group">
-                        <label for="projectName">Project Name *</label>
-                        <input 
-                            type="text" 
-                            id="projectName" 
-                            name="projectName" 
-                            required 
-                            placeholder="my-awesome-project"
-                            pattern="[a-z0-9\-]+"
-                            title="Only lowercase letters, numbers, and hyphens allowed"
-                        >
-                        <small>This will be used for both GitHub repo and CapRover app name</small>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="branch">Git Branch</label>
-                        <input 
-                            type="text" 
-                            id="branch" 
-                            name="branch" 
-                            value="main"
-                            placeholder="main"
-                        >
-                        <small>Default branch for deployment</small>
-                    </div>
-                    <small style="display: block; margin-top: 16px; color: var(--text-secondary);">
-                        ℹ️ GitHub credentials are configured via environment variables
-                    </small>
-
-                    <button type="submit" id="submitBtn" class="btn-primary">
-                        <span class="btn-text">Create Website</span>
-                        <span class="btn-loader" style="display: none;">⏳ Creating...</span>
+                <!-- Navigation Menu -->
+                <nav class="nav-menu">
+                    <button onclick="showPage('create')" id="nav-create" class="nav-btn active">
+                        Create Website
                     </button>
-                </form>
+                    <button onclick="showPage('repos')" id="nav-repos" class="nav-btn">
+                        Manage Repos
+                    </button>
+                    <button onclick="showPage('apps')" id="nav-apps" class="nav-btn">
+                        Manage Apps
+                    </button>
+                </nav>
 
-                <div id="result" class="result-card" style="display: none;">
-                    <h2>✅ Success!</h2>
-                    <div id="resultContent"></div>
-                    <button onclick="resetForm()" class="btn-secondary">Create Another</button>
+                <!-- Create Website Page -->
+                <div id="page-create" class="page-content">
+                    <form id="createForm" class="form-card">
+                        <div class="form-group">
+                            <label for="projectName">Project Name *</label>
+                            <input 
+                                type="text" 
+                                id="projectName" 
+                                name="projectName" 
+                                required 
+                                placeholder="my-awesome-project"
+                                pattern="[a-z0-9\-]+"
+                                title="Only lowercase letters, numbers, and hyphens allowed"
+                            >
+                            <small>This will be used for both GitHub repo and CapRover app name</small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="branch">Git Branch</label>
+                            <input 
+                                type="text" 
+                                id="branch" 
+                                name="branch" 
+                                value="main"
+                                placeholder="main"
+                            >
+                            <small>Default branch for deployment</small>
+                        </div>
+                        <small style="display: block; margin-top: 16px; color: var(--text-secondary);">
+                            ℹ️ GitHub credentials are configured via environment variables
+                        </small>
+
+                        <button type="submit" id="submitBtn" class="btn-primary">
+                            <span class="btn-text">Create Website</span>
+                            <span class="btn-loader" style="display: none;">⏳ Creating...</span>
+                        </button>
+                    </form>
+
+                    <div id="result" class="result-card" style="display: none;">
+                        <h2>✅ Success!</h2>
+                        <div id="resultContent"></div>
+                        <button onclick="resetForm()" class="btn-secondary">Create Another</button>
+                    </div>
+
+                    <div id="error" class="error-card" style="display: none;">
+                        <h2>❌ Error</h2>
+                        <div id="errorContent"></div>
+                        <button onclick="resetForm()" class="btn-secondary">Try Again</button>
+                    </div>
                 </div>
 
-                <div id="error" class="error-card" style="display: none;">
-                    <h2>❌ Error</h2>
-                    <div id="errorContent"></div>
-                    <button onclick="resetForm()" class="btn-secondary">Try Again</button>
+                <!-- Manage Repos Page -->
+                <div id="page-repos" class="page-content" style="display: none;">
+                    <h2>Manage GitHub Repositories</h2>
+                    <div id="reposLoading" class="form-card" style="text-align: center; padding: 40px;">
+                        <p>Loading repositories...</p>
+                    </div>
+                    <div id="reposList" class="form-card" style="display: none;">
+                        <div id="reposContent"></div>
+                    </div>
+                    <div id="reposError" class="error-card" style="display: none;">
+                        <div id="reposErrorContent"></div>
+                    </div>
+                </div>
+
+                <!-- Manage Apps Page -->
+                <div id="page-apps" class="page-content" style="display: none;">
+                    <h2>Manage CapRover Apps</h2>
+                    <div id="appsLoading" class="form-card" style="text-align: center; padding: 40px;">
+                        <p>Loading apps...</p>
+                    </div>
+                    <div id="appsList" class="form-card" style="display: none;">
+                        <div id="appsContent"></div>
+                    </div>
+                    <div id="appsError" class="error-card" style="display: none;">
+                        <div id="appsErrorContent"></div>
+                    </div>
                 </div>
             </div>
         </main>

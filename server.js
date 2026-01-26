@@ -12,6 +12,8 @@ const {
   caproverSetEnvVars,
   caproverGetEnvVars,
   caproverSetGitHubDeployment,
+  caproverListApps,
+  caproverDeleteApp,
 } = require('./caproverClient');
 
 // Load .env file only in local development (not in CapRover)
@@ -216,6 +218,61 @@ function findNextAvailablePort(usedPorts, startPort = 3000) {
     port++;
   }
   return port;
+}
+
+// List GitHub repositories
+async function listGitHubRepos() {
+  try {
+    if (!GITHUB_TOKEN) {
+      throw new Error('GITHUB_TOKEN environment variable is not set');
+    }
+    
+    const response = await githubAPI.get('/user/repos', {
+      params: {
+        sort: 'updated',
+        direction: 'desc',
+        per_page: 100
+      }
+    });
+    
+    return response.data.map(repo => ({
+      name: repo.name,
+      html_url: repo.html_url,
+      private: repo.private,
+      updated_at: repo.updated_at
+    }));
+  } catch (error) {
+    console.error(`[${new Date().toISOString()}] ❌ GitHub API error listing repos:`, error.message);
+    throw new Error(`Failed to list GitHub repos: ${error.message}`);
+  }
+}
+
+// Delete GitHub repository
+async function deleteGitHubRepo(repoName) {
+  try {
+    if (!GITHUB_TOKEN || !GITHUB_USERNAME) {
+      throw new Error('GITHUB_TOKEN and GITHUB_USERNAME environment variables are required');
+    }
+    
+    console.log(`[${new Date().toISOString()}] Deleting GitHub repository: ${repoName}`);
+    
+    const response = await githubAPI.delete(`/repos/${GITHUB_USERNAME}/${repoName}`);
+    
+    console.log(`[${new Date().toISOString()}] ✅ GitHub repository deleted successfully: ${repoName}`);
+    return { success: true };
+  } catch (error) {
+    console.error(`[${new Date().toISOString()}] ❌ GitHub API error deleting repo:`, {
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      data: error.response?.data,
+      message: error.message
+    });
+    
+    if (error.response?.status === 404) {
+      throw new Error(`Repository "${repoName}" not found`);
+    }
+    throw new Error(`Failed to delete GitHub repo: ${error.response?.data?.message || error.message}`);
+  }
 }
 
 // Create GitHub repository
@@ -782,6 +839,100 @@ app.post('/api/create-website', requireAuth, async (req, res) => {
     res.status(500).json({
       success: false,
       error: error.message || 'Failed to create website'
+    });
+  }
+});
+
+// List GitHub repositories (protected)
+app.get('/api/repos', requireAuth, async (req, res) => {
+  try {
+    if (!GITHUB_TOKEN) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'GITHUB_TOKEN not configured' 
+      });
+    }
+    
+    const repos = await listGitHubRepos();
+    res.json({ success: true, repos });
+  } catch (error) {
+    console.error(`[${new Date().toISOString()}] Error listing repos:`, error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message || 'Failed to list repositories' 
+    });
+  }
+});
+
+// Delete GitHub repository (protected)
+app.delete('/api/repos/:repoName', requireAuth, async (req, res) => {
+  const { repoName } = req.params;
+  
+  try {
+    if (!GITHUB_TOKEN || !GITHUB_USERNAME) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'GitHub credentials not configured' 
+      });
+    }
+    
+    await deleteGitHubRepo(repoName);
+    res.json({ success: true, message: `Repository "${repoName}" deleted successfully` });
+  } catch (error) {
+    console.error(`[${new Date().toISOString()}] Error deleting repo:`, error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message || 'Failed to delete repository' 
+    });
+  }
+});
+
+// List CapRover apps (protected)
+app.get('/api/apps', requireAuth, async (req, res) => {
+  try {
+    if (!CAPROVER_URL || !CAPROVER_PASSWORD) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'CapRover credentials not configured' 
+      });
+    }
+    
+    const baseUrl = CAPROVER_URL.replace(/\/+$/, '');
+    const token = await caproverLogin(baseUrl, CAPROVER_PASSWORD);
+    const apps = await caproverListApps(baseUrl, token);
+    
+    res.json({ success: true, apps });
+  } catch (error) {
+    console.error(`[${new Date().toISOString()}] Error listing apps:`, error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message || 'Failed to list CapRover apps' 
+    });
+  }
+});
+
+// Delete CapRover app (protected)
+app.delete('/api/apps/:appName', requireAuth, async (req, res) => {
+  const { appName } = req.params;
+  
+  try {
+    if (!CAPROVER_URL || !CAPROVER_PASSWORD) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'CapRover credentials not configured' 
+      });
+    }
+    
+    const baseUrl = CAPROVER_URL.replace(/\/+$/, '');
+    const token = await caproverLogin(baseUrl, CAPROVER_PASSWORD);
+    await caproverDeleteApp(baseUrl, token, appName);
+    
+    res.json({ success: true, message: `App "${appName}" deleted successfully` });
+  } catch (error) {
+    console.error(`[${new Date().toISOString()}] Error deleting app:`, error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message || 'Failed to delete CapRover app' 
     });
   }
 });

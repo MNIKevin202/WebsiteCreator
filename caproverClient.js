@@ -212,6 +212,37 @@ async function caproverGetEnvVars(baseUrl, token, appName) {
   return { ok: false, message: 'No env var getter endpoint found on this CapRover version' };
 }
 
+// List CapRover apps
+async function caproverListApps(baseUrl, token) {
+  const result = await caproverRequest({
+    baseUrl,
+    token,
+    path: '/api/v2/user/apps/appDefinitions',
+    method: 'GET',
+  });
+  
+  // CapRover returns apps in result.data.appDefinitions
+  const apps = result?.data?.appDefinitions || [];
+  return apps.map(app => ({
+    appName: app.appName,
+    instanceCount: app.instanceCount,
+    containerHttpPort: app.containerHttpPort,
+    hasPersistentData: app.hasPersistentData,
+    description: app.description
+  }));
+}
+
+// Delete CapRover app
+async function caproverDeleteApp(baseUrl, token, appName) {
+  return caproverRequest({
+    baseUrl,
+    token,
+    path: '/api/v2/user/apps/appDefinitions/delete',
+    method: 'POST',
+    body: { appName },
+  });
+}
+
 // Configure GitHub deployment
 async function caproverSetGitHubDeployment(baseUrl, token, appName, repoUrl, branch, githubToken) {
   // Extract repo owner and name from URL
@@ -247,4 +278,6 @@ module.exports = {
   caproverSetEnvVars,
   caproverGetEnvVars,
   caproverSetGitHubDeployment,
+  caproverListApps,
+  caproverDeleteApp,
 };
