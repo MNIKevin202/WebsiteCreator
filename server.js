@@ -220,7 +220,22 @@ async function createGitHubRepo(repoName, isPrivate = true) {
     
     if (error.response) {
       const errorData = error.response.data;
-      const errorMessage = errorData?.message || errorData?.errors?.[0]?.message || error.response.statusText || 'Repository creation failed';
+      let errorMessage = 'Repository creation failed';
+      
+      // Extract detailed error message from errors array
+      if (errorData?.errors && Array.isArray(errorData.errors) && errorData.errors.length > 0) {
+        const firstError = errorData.errors[0];
+        if (typeof firstError === 'object' && firstError.message) {
+          errorMessage = firstError.message;
+        } else if (typeof firstError === 'string') {
+          errorMessage = firstError;
+        } else if (firstError.field && firstError.code) {
+          errorMessage = `${firstError.field}: ${firstError.code}`;
+        }
+      } else if (errorData?.message) {
+        errorMessage = errorData.message;
+      }
+      
       throw new Error(`GitHub API error: ${errorMessage} (Status: ${error.response.status})`);
     }
     throw new Error(`Failed to create GitHub repo: ${error.message}`);
