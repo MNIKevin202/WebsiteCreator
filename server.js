@@ -972,6 +972,15 @@ app.post('/api/create-website', requireAuth, async (req, res) => {
     const githubResult = await createGitHubRepo(projectName, true);
     console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 1: ✅ GitHub repo created: ${githubResult.repoUrl}`);
     
+    // Step 1b: Push default starter files to GitHub
+    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 1b: Pushing default starter files to GitHub...`);
+    try {
+      await pushDefaultFilesToGitHub(GITHUB_USERNAME, projectName, branch);
+      console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 1b: ✅ Default files pushed to GitHub`);
+    } catch (error) {
+      console.warn(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 1b: ⚠️ Could not push default files: ${error.message}. Continuing anyway...`);
+      // Continue even if file push fails - repo is created and CapRover can deploy empty repo
+    }
     
     // Step 2: Authenticate with CapRover ONCE
     const baseUrl = CAPROVER_URL.replace(/\/+$/, '');
