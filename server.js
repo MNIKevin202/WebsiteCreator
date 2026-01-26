@@ -134,12 +134,19 @@ const caproverAPI = axios.create({
 // Get CapRover auth token
 async function getCapRoverAuthToken() {
   try {
+    const caproverUrl = CAPROVER_URL.replace(/\/$/, ''); // Remove trailing slash
+    console.log(`[${new Date().toISOString()}] Attempting to authenticate with CapRover at: ${caproverUrl}/api/v2/login`);
+    
     const response = await caproverAPI.post('/login', {
       password: CAPROVER_PASSWORD
     });
     return response.data.token;
   } catch (error) {
-    throw new Error(`Failed to authenticate with CapRover: ${error.message}`);
+    const errorMsg = error.response 
+      ? `CapRover API returned ${error.response.status}: ${error.response.statusText}. URL: ${error.config?.url || 'unknown'}`
+      : error.message;
+    console.error(`[${new Date().toISOString()}] CapRover authentication error:`, errorMsg);
+    throw new Error(`Failed to authenticate with CapRover: ${errorMsg}`);
   }
 }
 
