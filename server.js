@@ -246,9 +246,32 @@ async function createGitHubRepo(repoName, isPrivate = true) {
 async function createCapRoverApp(appName, authToken) {
   try {
     console.log(`Creating CapRover app: ${appName}`);
-    const response = await caproverAPI.post('/user/apps/appDefinitions/register', {
-      appName: appName
-    }, {
+    
+    // Use update endpoint with minimal config - it will create the app if it doesn't exist
+    // This is more reliable than the register endpoint which sometimes doesn't actually create the app
+    const minimalAppConfig = {
+      appName: appName,
+      instanceCount: 1,
+      captainDefinitionRelativeFilePath: './captain-definition',
+      notExposeAsWebApp: false,
+      hasPersistentData: false,
+      description: `Auto-created app: ${appName}`,
+      volumes: [],
+      ports: [],
+      preDeployFunction: '',
+      customNginxConfig: '',
+      customDomain: [],
+      forceSsl: false,
+      websocketSupport: false,
+      appDeployTokenConfig: {
+        enabled: false,
+        appDeployToken: ''
+      }
+    };
+    
+    console.log(`Using update endpoint to create app with config:`, JSON.stringify(minimalAppConfig, null, 2));
+    
+    const response = await caproverAPI.post('/user/apps/appDefinitions/update', minimalAppConfig, {
       headers: {
         'x-captain-auth': authToken
       }
@@ -258,8 +281,7 @@ async function createCapRoverApp(appName, authToken) {
     console.log(`✅ CapRover API response for app creation:`, {
       status: response.status,
       statusText: response.statusText,
-      data: JSON.stringify(response.data),
-      headers: response.headers
+      data: JSON.stringify(response.data)
     });
     
     // Check if the response indicates success
