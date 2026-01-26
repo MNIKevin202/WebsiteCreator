@@ -12,6 +12,7 @@ const {
   caproverSetEnvVars,
   caproverGetEnvVars,
   caproverSetGitHubDeployment,
+  caproverSetCustomDomains,
   caproverListApps,
   caproverDeleteApp,
 } = require('./caproverClient');
@@ -750,10 +751,14 @@ app.post('/api/create-website', requireAuth, async (req, res) => {
   console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] POST /api/create-website`);
   
   try {
-    const { projectName, branch = 'main' } = req.body;
+    const { projectName, branch = 'main', isDomain, domain } = req.body;
     
     if (!projectName) {
       return res.status(400).json({ error: 'Project name is required' });
+    }
+
+    if (isDomain && !domain) {
+      return res.status(400).json({ error: 'Domain is required if "This is a custom domain" is checked.' });
     }
     
     // Validate GitHub credentials (use token, not password)
@@ -831,7 +836,15 @@ app.post('/api/create-website', requireAuth, async (req, res) => {
     console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 8: Configuring GitHub deployment...`);
     await caproverSetGitHubDeployment(baseUrl, token, projectName, githubResult.cloneUrl, branch, GITHUB_TOKEN);
     console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 8: ✅ GitHub deployment configured`);
-    
+
+    // Step 9: Set custom domains if domain is provided
+    if (isDomain && domain) {
+      console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 9: Setting custom domains: ${domain} and www.${domain}...`);
+      const customDomains = [domain, `www.${domain}`];
+      await caproverSetCustomDomains(baseUrl, token, projectName, customDomains);
+      console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 9: ✅ Custom domains set: ${customDomains.join(', ')}`);
+    }
+
     console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] ✅ All steps completed successfully!`);
     res.json({
       success: true,
@@ -840,7 +853,9 @@ app.post('/api/create-website', requireAuth, async (req, res) => {
         githubRepo: githubResult.repoUrl,
         caproverApp: projectName,
         port: containerPort,
-        branch: branch
+        branch: branch,
+        isDomain: isDomain,
+        domain: domain
       }
     });
     

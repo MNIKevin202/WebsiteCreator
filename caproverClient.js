@@ -243,6 +243,25 @@ async function caproverDeleteApp(baseUrl, token, appName) {
   });
 }
 
+// Set custom domains for an app
+async function caproverSetCustomDomains(baseUrl, token, appName, domains) {
+  // Domains should be an array of strings
+  if (!Array.isArray(domains)) {
+    throw new Error('domains must be an array');
+  }
+
+  // Use update endpoint to set customDomain
+  return caproverRequest({
+    baseUrl, token,
+    path: '/api/v2/user/apps/appDefinitions/update',
+    method: 'POST',
+    body: {
+      appName,
+      customDomain: domains,
+    },
+  });
+}
+
 // Configure GitHub deployment
 async function caproverSetGitHubDeployment(baseUrl, token, appName, repoUrl, branch, githubToken) {
   // Extract repo owner and name from URL
@@ -278,6 +297,7 @@ module.exports = {
   caproverSetEnvVars,
   caproverGetEnvVars,
   caproverSetGitHubDeployment,
+  caproverSetCustomDomains,
   caproverListApps,
   caproverDeleteApp,
 };
