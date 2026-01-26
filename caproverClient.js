@@ -316,6 +316,14 @@ async function caproverSetCustomDomains(baseUrl, token, appName, domains) {
 
   console.log('[CAPROVER] Custom domains update result:', JSON.stringify(result).slice(0, 500));
 
+  // Check for CapRover error status codes (>= 1000 means error)
+  if (result && typeof result === 'object' && result.status !== undefined) {
+    if (result.status >= 1000) {
+      const errorMsg = result.description || result.message || `CapRover API error (status: ${result.status})`;
+      throw new Error(`Failed to set custom domains: ${errorMsg} (Status: ${result.status})`);
+    }
+  }
+
   return result;
 }
 
