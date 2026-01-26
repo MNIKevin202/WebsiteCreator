@@ -245,6 +245,7 @@ async function createGitHubRepo(repoName, isPrivate = true) {
 // Create CapRover app
 async function createCapRoverApp(appName, authToken) {
   try {
+    console.log(`Creating CapRover app: ${appName}`);
     const response = await caproverAPI.post('/user/apps/appDefinitions/register', {
       appName: appName
     }, {
@@ -255,8 +256,33 @@ async function createCapRoverApp(appName, authToken) {
     return { success: true, appName };
   } catch (error) {
     if (error.response) {
-      throw new Error(`CapRover API error: ${error.response.data.description || error.message}`);
+      const errorData = error.response.data || {};
+      const status = error.response.status;
+      const statusText = error.response.statusText;
+      
+      console.error('❌ CapRover API error details:', {
+        status,
+        statusText,
+        data: errorData,
+        message: error.message,
+        url: error.config?.url,
+        method: error.config?.method
+      });
+      
+      // Extract error message
+      let errorMessage = error.message;
+      if (errorData.description) {
+        errorMessage = errorData.description;
+      } else if (errorData.message) {
+        errorMessage = errorData.message;
+      } else if (typeof errorData === 'string') {
+        errorMessage = errorData;
+      }
+      
+      const errorDetails = `Status: ${status}${statusText ? ` (${statusText})` : ''}, Data: ${JSON.stringify(errorData)}`;
+      throw new Error(`CapRover API error: ${errorMessage}. Details: ${errorDetails}`);
     }
+    console.error('❌ CapRover API error (no response):', error.message);
     throw new Error(`Failed to create CapRover app: ${error.message}`);
   }
 }
@@ -345,6 +371,7 @@ async function configureCapRoverApp(appName, repoUrl, branch, username, password
     }
     
     // Configure deployment and port in one call
+    console.log(`Configuring CapRover app: ${appName} with repo ${repoOwner}/${repoName}, branch ${branch}, port ${port}`);
     const response = await caproverAPI.post(`/user/apps/appDefinitions/update`, updatePayload, {
       headers: {
         'x-captain-auth': authToken
@@ -354,9 +381,33 @@ async function configureCapRoverApp(appName, repoUrl, branch, username, password
     return { success: true };
   } catch (error) {
     if (error.response) {
-      const errorMsg = error.response.data?.description || error.response.data?.message || error.message;
-      throw new Error(`CapRover API error: ${errorMsg}`);
+      const errorData = error.response.data || {};
+      const status = error.response.status;
+      const statusText = error.response.statusText;
+      
+      console.error('❌ CapRover API error details (configure):', {
+        status,
+        statusText,
+        data: errorData,
+        message: error.message,
+        url: error.config?.url,
+        method: error.config?.method
+      });
+      
+      // Extract error message
+      let errorMessage = error.message;
+      if (errorData.description) {
+        errorMessage = errorData.description;
+      } else if (errorData.message) {
+        errorMessage = errorData.message;
+      } else if (typeof errorData === 'string') {
+        errorMessage = errorData;
+      }
+      
+      const errorDetails = `Status: ${status}${statusText ? ` (${statusText})` : ''}, Data: ${JSON.stringify(errorData)}`;
+      throw new Error(`CapRover API error: ${errorMessage}. Details: ${errorDetails}`);
     }
+    console.error('❌ CapRover API error (no response, configure):', error.message);
     throw new Error(`Failed to configure CapRover app: ${error.message}`);
   }
 }
@@ -470,10 +521,25 @@ app.post('/api/create-website', requireAuth, async (req, res) => {
     const availablePort = findNextAvailablePort(usedPorts);
     console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 3: Available port found: ${availablePort} (used ports: ${Array.from(usedPorts).join(', ') || 'none'})`);
     
-    // Step 4: Create CapRover app
-    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 4: Creating CapRover app: ${projectName}`);
-    await createCapRoverApp(projectName, authToken);
-    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 4: CapRover app created successfully`);
+    // Check if app already exists
+    const existingApp = await getAppDefinition(projectName, authToken);
+    if (existingApp) {
+      console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] ⚠️ CapRover app "${projectName}" already exists, will update instead of create`);
+    }
+    
+    // Step 4: Create CapRover app (if it doesn't exist)
+    if (!existingApp) {
+      console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 4: Creating CapRover app: ${projectName}`);
+      try {
+        await createCapRoverApp(projectName, authToken);
+        console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 4: CapRover app created successfully`);
+      } catch (error) {
+        console.error(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 4: Failed to create CapRover app:`, error.message);
+        throw error; // Re-throw to be caught by outer catch
+      }
+    } else {
+      console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 4: Skipping app creation (app already exists)`);
+    }
     
     // Step 5: Configure GitHub deployment and set container HTTP port
     console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 5: Configuring GitHub deployment and setting container HTTP port to ${availablePort}...`);
