@@ -253,7 +253,22 @@ async function createCapRoverApp(appName, authToken) {
         'x-captain-auth': authToken
       }
     });
-    return { success: true, appName };
+    
+    // Log the full response to see what CapRover returns
+    console.log(`✅ CapRover API response for app creation:`, {
+      status: response.status,
+      statusText: response.statusText,
+      data: JSON.stringify(response.data),
+      headers: response.headers
+    });
+    
+    // Check if the response indicates success
+    if (response.status >= 200 && response.status < 300) {
+      console.log(`✅ CapRover app "${appName}" creation API call succeeded`);
+      return { success: true, appName, response: response.data };
+    } else {
+      throw new Error(`CapRover API returned unexpected status: ${response.status}`);
+    }
   } catch (error) {
     if (error.response) {
       const errorData = error.response.data || {};
@@ -532,7 +547,18 @@ app.post('/api/create-website', requireAuth, async (req, res) => {
       console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 4: Creating CapRover app: ${projectName}`);
       try {
         await createCapRoverApp(projectName, authToken);
-        console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 4: CapRover app created successfully`);
+        console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 4: CapRover app creation API call completed`);
+        
+        // Verify the app was actually created
+        console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 4: Verifying app was created...`);
+        await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second for CapRover to process
+        const verifyApp = await getAppDefinition(projectName, authToken);
+        if (verifyApp) {
+          console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] ✅ Step 4: Verified - CapRover app "${projectName}" exists`);
+        } else {
+          console.error(`[${new Date().toISOString()}] [REQUEST ${requestId}] ⚠️ Step 4: WARNING - CapRover app "${projectName}" was not found after creation!`);
+          throw new Error(`CapRover app "${projectName}" was not created successfully. The API call succeeded but the app does not exist.`);
+        }
       } catch (error) {
         console.error(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 4: Failed to create CapRover app:`, error.message);
         throw error; // Re-throw to be caught by outer catch
