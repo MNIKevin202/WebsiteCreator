@@ -593,7 +593,7 @@ form.addEventListener('submit', async (e) => {
         
         if (data.success) {
             // Show success result
-            resultContent.innerHTML = `
+            let resultHtml = `
                 <div class="result-item">
                     <strong>GitHub Repo:</strong>
                     <a href="${data.data.githubRepo}" target="_blank">${data.data.githubRepo}</a>
@@ -611,6 +611,33 @@ form.addEventListener('submit', async (e) => {
                     <span>${data.data.branch}</span>
                 </div>
             `;
+            
+            // Add DNS instructions if domain was provided
+            if (formData.isDomain && formData.domain) {
+                const hostingerUrl = `https://hpanel.hostinger.com/domain/${formData.domain}/dns?tab=dns_records`;
+                resultHtml += `
+                    <div class="result-item" style="flex-direction: column; align-items: flex-start; gap: 12px; margin-top: 16px; padding: 20px; background: var(--bg-secondary); border: 2px solid var(--primary-color);">
+                        <strong style="color: var(--primary-color); font-size: 1.1rem;">🌐 DNS Configuration Required</strong>
+                        <p style="margin: 0; color: var(--text-secondary);">
+                            To complete the setup, you need to add an A record for your domain <strong>${escapeHtml(formData.domain)}</strong>:
+                        </p>
+                        <div style="background: var(--bg-color); padding: 12px; border-radius: 8px; width: 100%; font-family: monospace; font-size: 0.9rem;">
+                            <div><strong>Type:</strong> A</div>
+                            <div><strong>Name:</strong> @</div>
+                            <div><strong>Points to:</strong> 46.202.178.170</div>
+                            <div><strong>TTL:</strong> 60</div>
+                        </div>
+                        <a href="${hostingerUrl}" target="_blank" class="modal-link-btn" style="margin-top: 8px;">
+                            Open Hostinger DNS Settings
+                        </a>
+                        <small style="color: var(--text-muted); margin-top: 8px;">
+                            Click the button above to open your Hostinger DNS management page. Add a new A record with the values shown above.
+                        </small>
+                    </div>
+                `;
+            }
+            
+            resultContent.innerHTML = resultHtml;
             resultCard.style.display = 'block';
             resultCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         } else {
