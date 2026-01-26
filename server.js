@@ -1078,7 +1078,7 @@ app.post('/api/create-website', requireAuth, async (req, res) => {
     
     // Step 8: Configure GitHub deployment (optional)
     console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 8: Configuring GitHub deployment...`);
-    await caproverSetGitHubDeployment(baseUrl, token, projectName, githubResult.cloneUrl, branch, GITHUB_TOKEN);
+    await caproverSetGitHubDeployment(baseUrl, token, projectName, githubResult.cloneUrl, branch, GITHUB_TOKEN, GITHUB_USERNAME, containerPort);
     console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 8: ✅ GitHub deployment configured`);
 
     // Step 9: Set custom domains if domain is provided

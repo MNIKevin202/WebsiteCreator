@@ -328,7 +328,7 @@ async function caproverSetCustomDomains(baseUrl, token, appName, domains) {
 }
 
 // Configure GitHub deployment
-async function caproverSetGitHubDeployment(baseUrl, token, appName, repoUrl, branch, githubToken) {
+async function caproverSetGitHubDeployment(baseUrl, token, appName, repoUrl, branch, githubToken, githubUsername, containerHttpPort) {
   // Extract repo owner and name from URL
   const repoMatch = repoUrl.match(/github\.com[/:]([^/]+)\/([^/]+)(?:\.git)?$/);
   if (!repoMatch) {
@@ -337,7 +337,7 @@ async function caproverSetGitHubDeployment(baseUrl, token, appName, repoUrl, bra
   const repoOwner = repoMatch[1];
   const repoName = repoMatch[2].replace('.git', '');
 
-  console.log('[CAPROVER] Setting GitHub deployment for app:', appName, 'repo:', `${repoOwner}/${repoName}`, 'branch:', branch);
+  console.log('[CAPROVER] Setting GitHub deployment for app:', appName, 'repo:', `${repoOwner}/${repoName}`, 'branch:', branch, 'user:', githubUsername);
 
   // Get the current app definition to preserve other settings
   const getResult = await caproverRequest({
@@ -372,16 +372,16 @@ async function caproverSetGitHubDeployment(baseUrl, token, appName, repoUrl, bra
       enabled: false,
       appDeployToken: ''
     },
-    // Set repoInfo
+    // Set repoInfo with GitHub username (not repo owner)
     repoInfo: {
       repo: `${repoOwner}/${repoName}`,
       branch: branch || 'main',
-      user: repoOwner, // GitHub username
+      user: githubUsername || repoOwner, // Use provided GitHub username
       password: githubToken, // Use token instead of password
       sshKey: ''
     },
-    // Preserve containerHttpPort if it exists
-    containerHttpPort: app.containerHttpPort || undefined,
+    // Include containerHttpPort if provided (to ensure it's set)
+    containerHttpPort: containerHttpPort || app.containerHttpPort || undefined,
   };
 
   // Remove undefined fields
@@ -391,7 +391,7 @@ async function caproverSetGitHubDeployment(baseUrl, token, appName, repoUrl, bra
     }
   });
 
-  console.log('[CAPROVER] Updating app with repoInfo:', updatePayload.repoInfo);
+  console.log('[CAPROVER] Updating app with repoInfo:', updatePayload.repoInfo, 'containerHttpPort:', updatePayload.containerHttpPort);
 
   // Use update endpoint to set repoInfo along with other settings
   const result = await caproverRequest({
