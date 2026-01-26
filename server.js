@@ -684,28 +684,38 @@ app.post('/api/create-website', requireAuth, async (req, res) => {
     // Step 4: Create CapRover app (if it doesn't exist)
     if (!existingApp) {
       console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 4: Creating CapRover app: ${projectName}`);
+      
+      // Re-authenticate right before creating app to ensure fresh token
+      console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 4: Re-authenticating with CapRover for app creation...`);
+      let appCreationToken = await getCapRoverAuthToken();
+      console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 4: Got fresh token for app creation`);
+      
       try {
-        await createCapRoverApp(projectName, authToken);
+        await createCapRoverApp(projectName, appCreationToken);
         console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 4: CapRover app creation API call completed`);
         
         // Verify the app was actually created
         console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 4: Verifying app was created...`);
         await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second for CapRover to process
-        let verifyApp = await getAppDefinition(projectName, authToken);
+        
+        // Re-authenticate again for verification
+        appCreationToken = await getCapRoverAuthToken();
+        let verifyApp = await getAppDefinition(projectName, appCreationToken);
         
         // If app not found and error was auth-related, retry with fresh token
         if (!verifyApp) {
           console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 4: App not found, checking if auth token expired...`);
           // Re-authenticate and retry verification
-          const freshToken = await getCapRoverAuthToken();
-          verifyApp = await getAppDefinition(projectName, freshToken);
+          appCreationToken = await getCapRoverAuthToken();
+          verifyApp = await getAppDefinition(projectName, appCreationToken);
           if (verifyApp) {
-            authToken = freshToken; // Use fresh token for subsequent operations
+            authToken = appCreationToken; // Use fresh token for subsequent operations
             console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] ✅ Step 4: Verified - CapRover app "${projectName}" exists (after re-auth)`);
           } else {
             throw new Error(`CapRover app "${projectName}" was not created successfully. The API call succeeded but the app does not exist.`);
           }
         } else {
+          authToken = appCreationToken; // Use fresh token for subsequent operations
           console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] ✅ Step 4: Verified - CapRover app "${projectName}" exists`);
         }
       } catch (error) {
@@ -713,16 +723,17 @@ app.post('/api/create-website', requireAuth, async (req, res) => {
         if (error.isAuthTokenError || (error.message && error.message.includes('Auth token corrupted'))) {
           console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 4: Auth token expired, re-authenticating and retrying...`);
           try {
-            const freshToken = await getCapRoverAuthToken();
+            appCreationToken = await getCapRoverAuthToken();
             console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 4: Got fresh token, waiting 500ms before retry...`);
             await new Promise(resolve => setTimeout(resolve, 500)); // Wait a bit for token to be ready
             
-            await createCapRoverApp(projectName, freshToken);
-            authToken = freshToken; // Use fresh token for subsequent operations
+            await createCapRoverApp(projectName, appCreationToken);
+            authToken = appCreationToken; // Use fresh token for subsequent operations
             
             // Verify again
             await new Promise(resolve => setTimeout(resolve, 1000));
-            const verifyApp = await getAppDefinition(projectName, freshToken);
+            appCreationToken = await getCapRoverAuthToken(); // Fresh token for verification
+            const verifyApp = await getAppDefinition(projectName, appCreationToken);
             if (!verifyApp) {
               throw new Error(`CapRover app "${projectName}" was not created successfully after retry.`);
             }
