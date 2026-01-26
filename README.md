@@ -24,6 +24,8 @@ A web application that automates the creation of GitHub repositories and CapRove
 
 ## Installation
 
+### Local Development
+
 1. Clone or download this repository
 
 2. Install dependencies:
@@ -44,6 +46,37 @@ CAPROVER_PASSWORD=your_caprover_password
 GITHUB_USERNAME=your_github_username
 GITHUB_PASSWORD=your_github_token_or_password
 ```
+
+### Deploying to CapRover
+
+This application is CapRover-ready! To deploy it to your CapRover instance:
+
+1. **Create a new app in CapRover** (e.g., `website-creator`)
+
+2. **Connect your GitHub repository**:
+   - Go to the app's "Deployment" tab
+   - Select "GitHub" as the deployment method
+   - Enter repository: `MNIKevin202/WebsiteCreator`
+   - Enter branch: `main`
+   - Enter your GitHub username and token/password
+   - Click "Save & Update"
+
+3. **Set Environment Variables**:
+   - Go to the app's "App Configs" tab
+   - Add the following environment variables:
+     - `GITHUB_TOKEN` - Your GitHub Personal Access Token
+     - `CAPROVER_URL` - Your CapRover instance URL
+     - `CAPROVER_PASSWORD` - Your CapRover admin password
+     - `GITHUB_USERNAME` - Your GitHub username (optional)
+     - `GITHUB_PASSWORD` - Your GitHub token/password (optional)
+   - Click "Save & Update"
+
+4. **Deploy**: CapRover will automatically build and deploy your app!
+
+The app includes:
+- `captain-definition` - CapRover deployment configuration
+- `Dockerfile` - Container build instructions
+- Optimized for production deployment
 
 ## Usage
 
