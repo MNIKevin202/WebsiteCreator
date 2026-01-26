@@ -127,7 +127,8 @@ const githubAPI = axios.create({
 const caproverAPI = axios.create({
   baseURL: `${CAPROVER_URL.replace(/\/$/, '')}/api/v2`, // Remove trailing slash if present
   headers: {
-    'x-namespace': 'captain'
+    'x-namespace': 'captain',
+    'content-type': 'application/json;charset=UTF-8'
   }
 });
 
@@ -141,11 +142,26 @@ async function getCapRoverAuthToken() {
       password: CAPROVER_PASSWORD
     });
     
-    const token = response.data.token;
+    // Check if we got HTML instead of JSON (wrong URL or redirect)
+    const responseText = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
+    if (responseText.trim().startsWith('<')) {
+      throw new Error(`CapRover login did NOT return JSON. Got HTML instead. Check CAPROVER_URL. First 200 chars:\n${responseText.slice(0, 200)}`);
+    }
+    
+    // CapRover returns token at response.data.data.token (nested structure)
+    // Response structure: { status: 100, description: "OK", data: { token: "..." } }
+    const token = response.data?.data?.token || response.data?.token;
+    
     console.log(`[${new Date().toISOString()}] ✅ CapRover authentication successful. Token length: ${token ? token.length : 0}, Token preview: ${token ? token.substring(0, 20) + '...' : 'null'}`);
+    console.log(`[${new Date().toISOString()}] Full response structure:`, JSON.stringify({
+      hasData: !!response.data,
+      hasDataData: !!response.data?.data,
+      hasToken: !!token,
+      responseKeys: response.data ? Object.keys(response.data) : []
+    }));
     
     if (!token) {
-      throw new Error('CapRover authentication succeeded but no token was returned');
+      throw new Error(`CapRover authentication succeeded but no token was returned. Full response:\n${JSON.stringify(response.data, null, 2)}`);
     }
     
     return token;
@@ -163,7 +179,8 @@ async function getUsedPorts(authToken) {
   try {
     const response = await caproverAPI.get('/user/apps/appDefinitions', {
       headers: {
-        'x-captain-auth': authToken
+        'x-captain-auth': authToken,
+        'content-type': 'application/json;charset=UTF-8'
       }
     });
     
@@ -259,10 +276,12 @@ async function createCapRoverApp(appName, authToken) {
     try {
       console.log(`Attempting to register app using /register endpoint...`);
       const registerResponse = await caproverAPI.post('/user/apps/appDefinitions/register', {
-        appName: appName
+        appName: appName,
+        hasPersistentData: false
       }, {
         headers: {
-          'x-captain-auth': authToken
+          'x-captain-auth': authToken,
+          'content-type': 'application/json;charset=UTF-8'
         }
       });
       
@@ -339,7 +358,8 @@ async function createCapRoverApp(appName, authToken) {
     
     const response = await caproverAPI.post('/user/apps/appDefinitions/update', minimalAppConfig, {
       headers: {
-        'x-captain-auth': authToken
+        'x-captain-auth': authToken,
+        'content-type': 'application/json;charset=UTF-8'
       }
     });
     
@@ -433,7 +453,8 @@ async function getAppDefinition(appName, authToken) {
   try {
     const response = await caproverAPI.get('/user/apps/appDefinitions', {
       headers: {
-        'x-captain-auth': authToken
+        'x-captain-auth': authToken,
+        'content-type': 'application/json;charset=UTF-8'
       }
     });
     
@@ -515,7 +536,8 @@ async function configureCapRoverApp(appName, repoUrl, branch, username, password
     console.log(`Configuring CapRover app: ${appName} with repo ${repoOwner}/${repoName}, branch ${branch}, port ${port}`);
     const response = await caproverAPI.post(`/user/apps/appDefinitions/update`, updatePayload, {
       headers: {
-        'x-captain-auth': authToken
+        'x-captain-auth': authToken,
+        'content-type': 'application/json;charset=UTF-8'
       }
     });
     
