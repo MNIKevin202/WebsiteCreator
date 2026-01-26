@@ -127,7 +127,7 @@ function requireAuth(req, res, next) {
 const githubAPI = axios.create({
   baseURL: 'https://api.github.com',
   headers: {
-    'Authorization': `token ${GITHUB_TOKEN}`,
+    'Authorization': `Bearer ${GITHUB_TOKEN}`, // Use Bearer for better compatibility
     'Accept': 'application/vnd.github.v3+json'
   }
 });
@@ -271,7 +271,18 @@ async function deleteGitHubRepo(repoName) {
     if (error.response?.status === 404) {
       throw new Error(`Repository "${repoName}" not found`);
     }
-    throw new Error(`Failed to delete GitHub repo: ${error.response?.data?.message || error.message}`);
+    
+    // Check for permission-related errors
+    const errorMessage = error.response?.data?.message || error.message || 'Unknown error';
+    if (error.response?.status === 403 || errorMessage.toLowerCase().includes('admin') || errorMessage.toLowerCase().includes('permission')) {
+      throw new Error(`Permission denied: Your GitHub token needs the 'delete_repo' scope. Please create a new token at https://github.com/settings/tokens with 'delete_repo' permission and update GITHUB_TOKEN.`);
+    }
+    
+    if (error.response?.status === 401) {
+      throw new Error(`Authentication failed: Please check that your GITHUB_TOKEN is valid and not expired.`);
+    }
+    
+    throw new Error(`Failed to delete GitHub repo: ${errorMessage}`);
   }
 }
 
