@@ -52,10 +52,217 @@ function showPage(pageName) {
     }
     
     // Load data if needed
-    if (pageName === 'repos') {
-        loadRepos();
-    } else if (pageName === 'apps') {
-        loadApps();
+    if (pageName === 'manage') {
+        loadManage();
+    }
+}
+
+// Load and match repositories with apps
+async function loadManage() {
+    const manageLoading = document.getElementById('manageLoading');
+    const manageList = document.getElementById('manageList');
+    const manageError = document.getElementById('manageError');
+    const manageContent = document.getElementById('manageContent');
+    const manageErrorContent = document.getElementById('manageErrorContent');
+    
+    manageLoading.style.display = 'block';
+    manageList.style.display = 'none';
+    manageError.style.display = 'none';
+    
+    // Reset select all checkbox
+    document.getElementById('selectAllManage').checked = false;
+    updateSelectedManageCount();
+    
+    try {
+        // Load both repos and apps in parallel
+        const [reposResponse, appsResponse] = await Promise.all([
+            fetch('/api/repos', { credentials: 'include' }),
+            fetch('/api/apps', { credentials: 'include' })
+        ]);
+        
+        if (reposResponse.status === 401 || appsResponse.status === 401) {
+            showLogin();
+            return;
+        }
+        
+        const reposData = await reposResponse.json();
+        const appsData = await appsResponse.json();
+        
+        if (!reposData.success || !appsData.success) {
+            throw new Error(reposData.error || appsData.error || 'Failed to load data');
+        }
+        
+        manageLoading.style.display = 'none';
+        
+        const repos = reposData.repos || [];
+        const apps = appsData.apps || [];
+        
+        // Create a map of apps by name for quick lookup
+        const appsMap = {};
+        apps.forEach(app => {
+            appsMap[app.appName] = app;
+        });
+        
+        // Match repos with apps and create combined list
+        const matched = [];
+        const unmatchedRepos = [];
+        const unmatchedApps = [];
+        
+        repos.forEach(repo => {
+            const app = appsMap[repo.name];
+            if (app) {
+                matched.push({ repo, app, name: repo.name });
+                delete appsMap[repo.name];
+            } else {
+                unmatchedRepos.push(repo);
+            }
+        });
+        
+        // Add unmatched apps
+        Object.values(appsMap).forEach(app => {
+            unmatchedApps.push(app);
+        });
+        
+        // Sort matched by name
+        matched.sort((a, b) => a.name.localeCompare(b.name));
+        
+        if (matched.length === 0 && unmatchedRepos.length === 0 && unmatchedApps.length === 0) {
+            manageContent.innerHTML = '<div class="empty-state"><p>No repositories or apps found.</p></div>';
+            manageList.style.display = 'block';
+            return;
+        }
+        
+        let html = '';
+        
+        // Render matched pairs side by side
+        matched.forEach(({ repo, app, name }) => {
+            html += `
+                <div class="manage-item">
+                    <div class="manage-repo">
+                        <div class="manage-repo-header">
+                            <div class="manage-checkbox-wrapper">
+                                <input type="checkbox" class="repo-checkbox" value="${repo.name}" onchange="updateSelectedManageCount()">
+                                <span class="manage-repo-name">${escapeHtml(repo.name)}</span>
+                            </div>
+                            <button onclick="deleteRepo('${repo.name}')" class="btn-danger" id="delete-repo-${repo.name}" style="width: auto; padding: 6px 12px; font-size: 0.85rem;">
+                                Delete
+                            </button>
+                        </div>
+                        <div class="manage-repo-url">
+                            <a href="${repo.html_url}" target="_blank">${repo.html_url}</a>
+                        </div>
+                    </div>
+                    <div class="manage-app">
+                        <div class="manage-app-header">
+                            <div class="manage-checkbox-wrapper">
+                                <input type="checkbox" class="app-checkbox" value="${app.appName}" onchange="updateSelectedManageCount()">
+                                <span class="manage-app-name">${escapeHtml(app.appName)}</span>
+                            </div>
+                            <button onclick="deleteApp('${app.appName}')" class="btn-danger" id="delete-app-${app.appName}" style="width: auto; padding: 6px 12px; font-size: 0.85rem;">
+                                Delete
+                            </button>
+                        </div>
+                        <div class="manage-app-info">
+                            Port: ${app.containerHttpPort || 'N/A'} | Instances: ${app.instanceCount || 1}
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        
+        // Render unmatched repos (full width)
+        unmatchedRepos.forEach(repo => {
+            html += `
+                <div class="manage-item manage-item-single">
+                    <div class="manage-repo">
+                        <div class="manage-repo-header">
+                            <div class="manage-checkbox-wrapper">
+                                <input type="checkbox" class="repo-checkbox" value="${repo.name}" onchange="updateSelectedManageCount()">
+                                <span class="manage-repo-name">${escapeHtml(repo.name)}</span>
+                            </div>
+                            <button onclick="deleteRepo('${repo.name}')" class="btn-danger" id="delete-repo-${repo.name}" style="width: auto; padding: 6px 12px; font-size: 0.85rem;">
+                                Delete
+                            </button>
+                        </div>
+                        <div class="manage-repo-url">
+                            <a href="${repo.html_url}" target="_blank">${repo.html_url}</a>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        
+        // Render unmatched apps (full width)
+        unmatchedApps.forEach(app => {
+            html += `
+                <div class="manage-item manage-item-single">
+                    <div class="manage-app">
+                        <div class="manage-app-header">
+                            <div class="manage-checkbox-wrapper">
+                                <input type="checkbox" class="app-checkbox" value="${app.appName}" onchange="updateSelectedManageCount()">
+                                <span class="manage-app-name">${escapeHtml(app.appName)}</span>
+                            </div>
+                            <button onclick="deleteApp('${app.appName}')" class="btn-danger" id="delete-app-${app.appName}" style="width: auto; padding: 6px 12px; font-size: 0.85rem;">
+                                Delete
+                            </button>
+                        </div>
+                        <div class="manage-app-info">
+                            Port: ${app.containerHttpPort || 'N/A'} | Instances: ${app.instanceCount || 1}
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        
+        manageContent.innerHTML = html;
+        manageList.style.display = 'block';
+        
+    } catch (error) {
+        manageLoading.style.display = 'none';
+        manageErrorContent.textContent = error.message || 'Failed to load repositories and apps';
+        manageError.style.display = 'block';
+    }
+}
+
+// Toggle select all for manage page
+function toggleSelectAllManage() {
+    const selectAll = document.getElementById('selectAllManage').checked;
+    const repoCheckboxes = document.querySelectorAll('.repo-checkbox');
+    const appCheckboxes = document.querySelectorAll('.app-checkbox');
+    
+    [...repoCheckboxes, ...appCheckboxes].forEach(checkbox => {
+        checkbox.checked = selectAll;
+    });
+    updateSelectedManageCount();
+}
+
+// Update selected count for manage page
+function updateSelectedManageCount() {
+    const repoCheckboxes = document.querySelectorAll('.repo-checkbox');
+    const appCheckboxes = document.querySelectorAll('.app-checkbox');
+    
+    const selectedRepos = Array.from(repoCheckboxes).filter(cb => cb.checked);
+    const selectedApps = Array.from(appCheckboxes).filter(cb => cb.checked);
+    
+    const reposCount = selectedRepos.length;
+    const appsCount = selectedApps.length;
+    
+    document.getElementById('selectedReposCount').textContent = reposCount;
+    document.getElementById('selectedAppsCount').textContent = appsCount;
+    
+    document.getElementById('bulkDeleteReposBtn').disabled = reposCount === 0;
+    document.getElementById('bulkDeleteAppsBtn').disabled = appsCount === 0;
+    
+    // Update select all checkbox state
+    const selectAll = document.getElementById('selectAllManage');
+    const totalCheckboxes = repoCheckboxes.length + appCheckboxes.length;
+    if (totalCheckboxes === 0) {
+        selectAll.checked = false;
+        selectAll.indeterminate = false;
+    } else {
+        const totalSelected = reposCount + appsCount;
+        selectAll.checked = totalSelected === totalCheckboxes;
+        selectAll.indeterminate = totalSelected > 0 && totalSelected < totalCheckboxes;
     }
 }
 
@@ -151,7 +358,7 @@ function updateSelectedReposCount() {
     }
 }
 
-// Bulk delete repositories
+// Bulk delete repositories (updated for manage page)
 async function bulkDeleteRepos() {
     const checkboxes = document.querySelectorAll('.repo-checkbox:checked');
     const selectedRepos = Array.from(checkboxes).map(cb => cb.value);
@@ -217,8 +424,8 @@ async function performBulkDeleteRepos(selectedRepos) {
         showToast(`Successfully deleted ${successCount} repository/repositories!`, 'success');
     }
     
-    // Reload repos list
-    loadRepos();
+    // Reload manage list
+    loadManage();
 }
 
 // Delete GitHub repository
@@ -253,8 +460,8 @@ async function performDeleteRepo(repoName) {
         
         if (data.success) {
             showToast(`Repository "${repoName}" deleted successfully`, 'success');
-            // Reload repos list
-            loadRepos();
+            // Reload manage list
+            loadManage();
         } else {
             throw new Error(data.error || 'Failed to delete repository');
         }
@@ -358,7 +565,7 @@ function updateSelectedAppsCount() {
     }
 }
 
-// Bulk delete CapRover apps
+// Bulk delete CapRover apps (updated for manage page)
 async function bulkDeleteApps() {
     const checkboxes = document.querySelectorAll('.app-checkbox:checked');
     const selectedApps = Array.from(checkboxes).map(cb => cb.value);
@@ -424,8 +631,8 @@ async function performBulkDeleteApps(selectedApps) {
         showToast(`Successfully deleted ${successCount} app/apps!`, 'success');
     }
     
-    // Reload apps list
-    loadApps();
+    // Reload manage list
+    loadManage();
 }
 
 // Delete CapRover app
@@ -460,8 +667,8 @@ async function performDeleteApp(appName) {
         
         if (data.success) {
             showToast(`App "${appName}" deleted successfully`, 'success');
-            // Reload apps list
-            loadApps();
+            // Reload manage list
+            loadManage();
         } else {
             throw new Error(data.error || 'Failed to delete app');
         }
@@ -622,28 +829,15 @@ form.addEventListener('submit', async (e) => {
             // Add DNS instructions if domain was provided
             if (formData.isDomain && formData.domain) {
                 const hostingerUrl = `https://hpanel.hostinger.com/domain/${formData.domain}/dns?tab=dns_records`;
-                const fillScript = `
-// Copy and paste this into the browser console on Hostinger DNS page:
-(function() {
-    const pointsToField = document.getElementById('hdomains_dns_create_record_pointsTo');
-    const ttlField = document.getElementById('hdomains_dns_create_record_ttl');
-    if (pointsToField) {
-        pointsToField.value = '46.202.178.170';
-        pointsToField.dispatchEvent(new Event('input', { bubbles: true }));
-    }
-    if (ttlField) {
-        ttlField.value = '60';
-        ttlField.dispatchEvent(new Event('input', { bubbles: true }));
-    }
-    if (pointsToField && ttlField) {
-        alert('Fields filled! Type: A, Name: @, Points to: 46.202.178.170, TTL: 60');
-    } else {
-        alert('Fields not found. Make sure you are on the DNS records page.');
-    }
-})();
-                `.trim();
-                
-                resultHtml += `
+                        <a href="#" onclick="openHostingerDNS('${escapeHtml(formData.domain)}'); return false;" class="modal-link-btn" style="margin-top: 8px;">
+                            Open Hostinger DNS Settings
+                        </a>
+                        <div style="margin-top: 12px; padding: 12px; background: var(--bg-color); border-radius: 8px; width: 100%; border: 1px solid var(--border-color);">
+                            <strong style="color: var(--text-primary); font-size: 0.9rem; display: block; margin-bottom: 8px;">⚡ Auto-Fill:</strong>
+                            <p style="margin: 0 0 8px 0; color: var(--text-secondary); font-size: 0.85rem;">
+                                Click "Auto-Fill DNS Fields" button in the Hostinger window to automatically fill the form fields.
+                            </p>
+                        </div>
                     <div class="result-item" style="flex-direction: column; align-items: flex-start; gap: 12px; margin-top: 16px; padding: 20px; background: var(--bg-secondary); border: 2px solid var(--primary-color);">
                         <strong style="color: var(--primary-color); font-size: 1.1rem;">🌐 DNS Configuration Required</strong>
                         <p style="margin: 0; color: var(--text-secondary);">

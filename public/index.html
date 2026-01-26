@@ -67,11 +67,8 @@
                     <button onclick="showPage('create')" id="nav-create" class="nav-btn active">
                         Create Website
                     </button>
-                    <button onclick="showPage('repos')" id="nav-repos" class="nav-btn">
-                        Manage Repos
-                    </button>
-                    <button onclick="showPage('apps')" id="nav-apps" class="nav-btn">
-                        Manage Apps
+                    <button onclick="showPage('manage')" id="nav-manage" class="nav-btn">
+                        Manage
                     </button>
                 </nav>
 
@@ -148,49 +145,31 @@
                     </div>
                 </div>
 
-                <!-- Manage Repos Page -->
-                <div id="page-repos" class="page-content" style="display: none;">
-                    <h2>Manage GitHub Repositories</h2>
-                    <div id="reposLoading" class="form-card" style="text-align: center; padding: 40px;">
-                        <p>Loading repositories...</p>
+                <!-- Manage Page (Combined Repos and Apps) -->
+                <div id="page-manage" class="page-content" style="display: none;">
+                    <h2>Manage Repositories & Apps</h2>
+                    <div id="manageLoading" class="form-card" style="text-align: center; padding: 40px;">
+                        <p>Loading repositories and apps...</p>
                     </div>
-                    <div id="reposList" class="form-card" style="display: none;">
+                    <div id="manageList" class="form-card" style="display: none;">
                         <div class="bulk-actions">
                             <label class="checkbox-label">
-                                <input type="checkbox" id="selectAllRepos" onchange="toggleSelectAllRepos()">
+                                <input type="checkbox" id="selectAllManage" onchange="toggleSelectAllManage()">
                                 <span>Select All</span>
                             </label>
-                            <button onclick="bulkDeleteRepos()" id="bulkDeleteReposBtn" class="btn-danger" disabled>
-                                Delete Selected (<span id="selectedReposCount">0</span>)
-                            </button>
+                            <div style="display: flex; gap: 8px;">
+                                <button onclick="bulkDeleteRepos()" id="bulkDeleteReposBtn" class="btn-danger" disabled>
+                                    Delete Selected Repos (<span id="selectedReposCount">0</span>)
+                                </button>
+                                <button onclick="bulkDeleteApps()" id="bulkDeleteAppsBtn" class="btn-danger" disabled>
+                                    Delete Selected Apps (<span id="selectedAppsCount">0</span>)
+                                </button>
+                            </div>
                         </div>
-                        <div id="reposContent"></div>
+                        <div id="manageContent"></div>
                     </div>
-                    <div id="reposError" class="error-card" style="display: none;">
-                        <div id="reposErrorContent"></div>
-                    </div>
-                </div>
-
-                <!-- Manage Apps Page -->
-                <div id="page-apps" class="page-content" style="display: none;">
-                    <h2>Manage CapRover Apps</h2>
-                    <div id="appsLoading" class="form-card" style="text-align: center; padding: 40px;">
-                        <p>Loading apps...</p>
-                    </div>
-                    <div id="appsList" class="form-card" style="display: none;">
-                        <div class="bulk-actions">
-                            <label class="checkbox-label">
-                                <input type="checkbox" id="selectAllApps" onchange="toggleSelectAllApps()">
-                                <span>Select All</span>
-                            </label>
-                            <button onclick="bulkDeleteApps()" id="bulkDeleteAppsBtn" class="btn-danger" disabled>
-                                Delete Selected (<span id="selectedAppsCount">0</span>)
-                            </button>
-                        </div>
-                        <div id="appsContent"></div>
-                    </div>
-                    <div id="appsError" class="error-card" style="display: none;">
-                        <div id="appsErrorContent"></div>
+                    <div id="manageError" class="error-card" style="display: none;">
+                        <div id="manageErrorContent"></div>
                     </div>
                 </div>
             </div>
@@ -246,6 +225,27 @@
 
     <!-- Toast Notification Container -->
     <div id="toastContainer" class="toast-container"></div>
+
+    <!-- Hostinger DNS Iframe Modal -->
+    <div id="hostingerModal" class="modal" style="display: none;">
+        <div class="modal-content" style="max-width: 95vw; width: 95vw; height: 95vh; max-height: 95vh;">
+            <div class="modal-header">
+                <h2 id="hostingerModalTitle">Hostinger DNS Settings</h2>
+                <button class="modal-close" onclick="closeHostingerModal()">&times;</button>
+            </div>
+            <div class="modal-body" style="padding: 0; position: relative; flex: 1; min-height: 0;">
+                <iframe id="hostingerIframe" src="" style="width: 100%; height: 100%; border: none; border-radius: 0 0 16px 16px;"></iframe>
+                <div class="iframe-overlay-buttons">
+                    <button onclick="fillHostingerFields()" class="btn-primary" style="width: auto; padding: 12px 24px;">
+                        ⚡ Auto-Fill DNS Fields
+                    </button>
+                    <button onclick="closeHostingerModal()" class="btn-secondary" style="width: auto; padding: 12px 24px;">
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <script src="script.js"></script>
 </body>
