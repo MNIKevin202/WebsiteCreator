@@ -1279,6 +1279,25 @@ function openHostingerDNS(domain) {
     showToast('Hostinger DNS page opened in new tab. Use the auto-fill script below.', 'info');
 }
 
+// Copy to clipboard utility function
+function copyToClipboard(text, buttonElement) {
+    navigator.clipboard.writeText(text).then(() => {
+        const originalText = buttonElement.textContent;
+        buttonElement.textContent = '✓ Copied!';
+        buttonElement.style.background = 'var(--success-color)';
+        buttonElement.style.borderColor = 'var(--success-color)';
+        
+        setTimeout(() => {
+            buttonElement.textContent = originalText;
+            buttonElement.style.background = '';
+            buttonElement.style.borderColor = '';
+        }, 2000);
+    }).catch(err => {
+        console.error('Failed to copy:', err);
+        showToast('Failed to copy to clipboard', 'error');
+    });
+}
+
 function copyHostingerScript(elementId) {
     const scriptElement = document.getElementById(elementId);
     if (!scriptElement) return;
