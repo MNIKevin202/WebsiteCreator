@@ -247,8 +247,66 @@ async function createCapRoverApp(appName, authToken) {
   try {
     console.log(`Creating CapRover app: ${appName}`);
     
-    // Use update endpoint with minimal config - it will create the app if it doesn't exist
-    // This is more reliable than the register endpoint which sometimes doesn't actually create the app
+    // Try register endpoint first
+    try {
+      console.log(`Attempting to register app using /register endpoint...`);
+      const registerResponse = await caproverAPI.post('/user/apps/appDefinitions/register', {
+        appName: appName
+      }, {
+        headers: {
+          'x-captain-auth': authToken
+        }
+      });
+      
+      // Check response for errors
+      let registerData = registerResponse.data;
+      if (typeof registerData === 'string') {
+        try {
+          registerData = JSON.parse(registerData);
+        } catch (e) {
+          // Continue to update endpoint if parse fails
+        }
+      }
+      
+      // If register succeeded (no error status), we're done
+      if (registerData && typeof registerData === 'object' && registerData.status !== undefined) {
+        if (registerData.status >= 1000) {
+          // Register failed, try update endpoint
+          console.log(`Register endpoint returned error status ${registerData.status}, trying update endpoint...`);
+        } else {
+          // Register succeeded
+          console.log(`✅ CapRover app "${appName}" registered successfully`);
+          return { success: true, appName, response: registerData };
+        }
+      } else if (registerResponse.status >= 200 && registerResponse.status < 300) {
+        // Register succeeded (no error status in response)
+        console.log(`✅ CapRover app "${appName}" registered successfully`);
+        return { success: true, appName, response: registerData };
+      }
+    } catch (registerError) {
+      // If register fails, try update endpoint
+      console.log(`Register endpoint failed, trying update endpoint...`);
+      if (registerError.response) {
+        const errorData = registerError.response.data || {};
+        if (typeof errorData === 'string') {
+          try {
+            const parsed = JSON.parse(errorData);
+            if (parsed.status >= 1000 && parsed.status !== 1106) {
+              // Not an auth error, try update endpoint
+            } else if (parsed.status === 1106) {
+              // Auth error, throw it to trigger retry
+              const error = new Error(`CapRover API error: ${parsed.description || 'Auth token corrupted'} (Status: ${parsed.status})`);
+              error.isAuthTokenError = true;
+              throw error;
+            }
+          } catch (e) {
+            // Continue to update endpoint
+          }
+        }
+      }
+    }
+    
+    // Fallback to update endpoint with minimal config
     const minimalAppConfig = {
       appName: appName,
       instanceCount: 1,
@@ -654,17 +712,29 @@ app.post('/api/create-website', requireAuth, async (req, res) => {
         // If error is auth-related, try re-authenticating and retrying once
         if (error.isAuthTokenError || (error.message && error.message.includes('Auth token corrupted'))) {
           console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 4: Auth token expired, re-authenticating and retrying...`);
-          const freshToken = await getCapRoverAuthToken();
-          await createCapRoverApp(projectName, freshToken);
-          authToken = freshToken; // Use fresh token for subsequent operations
-          
-          // Verify again
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          const verifyApp = await getAppDefinition(projectName, freshToken);
-          if (!verifyApp) {
-            throw new Error(`CapRover app "${projectName}" was not created successfully after retry.`);
+          try {
+            const freshToken = await getCapRoverAuthToken();
+            console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 4: Got fresh token, waiting 500ms before retry...`);
+            await new Promise(resolve => setTimeout(resolve, 500)); // Wait a bit for token to be ready
+            
+            await createCapRoverApp(projectName, freshToken);
+            authToken = freshToken; // Use fresh token for subsequent operations
+            
+            // Verify again
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            const verifyApp = await getAppDefinition(projectName, freshToken);
+            if (!verifyApp) {
+              throw new Error(`CapRover app "${projectName}" was not created successfully after retry.`);
+            }
+            console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] ✅ Step 4: CapRover app created successfully after re-auth`);
+          } catch (retryError) {
+            console.error(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 4: Retry also failed:`, retryError.message);
+            // If retry also fails with auth error, it might be a different issue
+            if (retryError.isAuthTokenError || (retryError.message && retryError.message.includes('Auth token corrupted'))) {
+              throw new Error(`CapRover authentication failed even after re-authentication. This may indicate a CapRover configuration issue. Original error: ${error.message}`);
+            }
+            throw retryError;
           }
-          console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] ✅ Step 4: CapRover app created successfully after re-auth`);
         } else {
           console.error(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 4: Failed to create CapRover app:`, error.message);
           throw error; // Re-throw to be caught by outer catch
