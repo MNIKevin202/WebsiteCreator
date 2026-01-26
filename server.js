@@ -125,7 +125,7 @@ const githubAPI = axios.create({
 
 // CapRover API helper
 const caproverAPI = axios.create({
-  baseURL: `${CAPROVER_URL}/api/v2`,
+  baseURL: `${CAPROVER_URL.replace(/\/$/, '')}/api/v2`, // Remove trailing slash if present
   headers: {
     'x-namespace': 'captain'
   }
