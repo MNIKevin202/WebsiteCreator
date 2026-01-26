@@ -543,6 +543,13 @@ async function logout() {
     }
 }
 
+// Utility Functions
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
 // Dashboard form elements
 const form = document.getElementById('createForm');
 const submitBtn = document.getElementById('submitBtn');
