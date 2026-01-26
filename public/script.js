@@ -568,7 +568,9 @@ form.addEventListener('submit', async (e) => {
     // Get form data
     const formData = {
         projectName: document.getElementById('projectName').value.trim(),
-        branch: document.getElementById('branch').value.trim() || 'main'
+        branch: document.getElementById('branch').value.trim() || 'main',
+        isDomain: document.getElementById('isDomain').checked,
+        domain: document.getElementById('domain').value.trim() || null
     };
     
     try {
@@ -629,6 +631,8 @@ form.addEventListener('submit', async (e) => {
 
 function resetForm() {
     form.reset();
+    document.getElementById('isDomain').checked = false;
+    toggleDomainField();
     resultCard.style.display = 'none';
     errorCard.style.display = 'none';
     form.scrollIntoView({ behavior: 'smooth', block: 'start' });
