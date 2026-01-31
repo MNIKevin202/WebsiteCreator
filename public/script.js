@@ -333,10 +333,10 @@ async function loadManage() {
         const repos = reposData.repos || [];
         const apps = appsData.apps || [];
         
-        // Create a map of apps by name for quick lookup
+        // Create a map of apps by lowercased name for quick lookup (CapRover app names are lowercased)
         const appsMap = {};
         apps.forEach(app => {
-            appsMap[app.appName] = app;
+            appsMap[String(app.appName || '').toLowerCase()] = app;
         });
         
         // Match repos with apps and create combined list
@@ -345,10 +345,11 @@ async function loadManage() {
         const unmatchedApps = [];
         
         repos.forEach(repo => {
-            const app = appsMap[repo.name];
+            const repoKey = String(repo.name || '').toLowerCase();
+            const app = appsMap[repoKey];
             if (app) {
                 matched.push({ repo, app, name: repo.name });
-                delete appsMap[repo.name];
+                delete appsMap[repoKey];
             } else {
                 unmatchedRepos.push(repo);
             }
@@ -1532,10 +1533,25 @@ const projectNameInput = document.getElementById('projectName');
 if (projectNameInput) {
     projectNameInput.addEventListener('input', (e) => {
         const value = e.target.value;
-        const isValid = /^[a-z0-9-]+$/.test(value) || value === '';
+        const isValid = /^[a-z0-9-]+$/i.test(value) || value === '';
         
         if (value && !isValid) {
-            e.target.setCustomValidity('Only lowercase letters, numbers, and hyphens allowed');
+            e.target.setCustomValidity('Only letters, numbers, and hyphens allowed');
+        } else {
+            e.target.setCustomValidity('');
+        }
+    });
+}
+
+// Validate Discord project name format
+const discordProjectNameInput = document.getElementById('discordProjectName');
+if (discordProjectNameInput) {
+    discordProjectNameInput.addEventListener('input', (e) => {
+        const value = e.target.value;
+        const isValid = /^[a-z0-9-]+$/i.test(value) || value === '';
+
+        if (value && !isValid) {
+            e.target.setCustomValidity('Only letters, numbers, and hyphens allowed');
         } else {
             e.target.setCustomValidity('');
         }
@@ -1781,101 +1797,218 @@ document.addEventListener('keydown', function(event) {
 
 // Wizard Functions
 let wizardData = {
-    isWebsite: null,
-    websiteName: '',
+    wizardType: null, // 'website' | 'discordBot'
+    projectName: '',
     githubRepo: '',
     darkMode: null,
     port: '',
     varsOnCapRover: null,
     selectedVars: [],
-    websiteDetails: ''
+    details: '',
+    discordCommandStyle: null, // 'prefix' | 'slash' | 'both'
+    discordPrefix: '!',
+    featuresToStart: ''
 };
 
 let currentWizardStep = 0;
 let wizardRepos = [];
 
-const wizardSteps = [
-    {
-        question: 'Is this a website?',
-        type: 'yesno',
-        key: 'isWebsite'
-    },
-    {
-        question: 'What is the name of the website?',
-        type: 'text',
-        key: 'websiteName',
-        placeholder: 'my-awesome-website',
-        required: true
-    },
-    {
-        question: 'Select GitHub repository:',
-        type: 'select',
-        key: 'githubRepo',
-        options: [], // Will be populated dynamically
-        required: false
-    },
-    {
-        question: 'Do you want dark mode?',
-        type: 'yesno',
-        key: 'darkMode'
-    },
-    {
-        question: 'What is the port?',
-        type: 'number',
-        key: 'port',
-        placeholder: '3000',
-        min: 3000,
-        max: 65535
-    },
-    {
-        question: 'Are the variables stored on CapRover?',
-        type: 'yesno',
-        key: 'varsOnCapRover'
-    },
-    {
-        question: 'Check all of the variables used:',
-        type: 'checkboxes',
-        key: 'selectedVars',
+function getWizardSteps() {
+    const repoOptions = wizardRepos.map(repo => ({
+        value: repo.html_url,
+        label: `${repo.name} (${repo.html_url})`
+    }));
+
+    const typeStep = {
+        question: 'What are you creating?',
+        type: 'choice',
+        key: 'wizardType',
+        required: true,
         options: [
-            'MONGO_URI',
-            'SHIPENGINE_API_KEY',
-            'AFTERSHIP_API_KEY',
-            'OPENAI_API_KEY',
-            'EBAY_APP_ID',
-            'EBAY_CERT_ID',
-            'EBAY_DEV_ID',
-            'SMTP_HOST',
-            'SMTP_PORT',
-            'SMTP_SECURE',
-            'SMTP_USER',
-            'SMTP_PASS',
-            'MAIL_FROM_NAME',
-            'MAIL_FROM_EMAIL',
-            'MAIL_PWRESET_NAME',
-            'MAIL_PWRESET_EMAIL',
-            'STAXXIO_SSO_SECRET'
+            { value: 'website', label: 'Website', description: 'Generate a Cursor AI prompt for a web app.' },
+            { value: 'discordBot', label: 'Discord Bot', description: 'Generate a Cursor AI prompt for a Discord bot (discord.js).' }
         ]
-    },
-    {
-        question: 'Details on the website:',
-        type: 'textarea',
-        key: 'websiteDetails',
-        placeholder: 'Describe the website functionality, features, and requirements...',
-        required: true
+    };
+
+    if (!wizardData.wizardType) {
+        return [typeStep];
     }
-];
+
+    if (wizardData.wizardType === 'website') {
+        return [
+            typeStep,
+            {
+                question: 'What is the name of the website?',
+                type: 'text',
+                key: 'projectName',
+                placeholder: 'my-awesome-website',
+                required: true
+            },
+            {
+                question: 'Select GitHub repository:',
+                type: 'select',
+                key: 'githubRepo',
+                options: repoOptions,
+                required: false
+            },
+            {
+                question: 'Do you want dark mode?',
+                type: 'yesno',
+                key: 'darkMode'
+            },
+            {
+                question: 'What is the port?',
+                type: 'number',
+                key: 'port',
+                placeholder: '3000',
+                min: 3000,
+                max: 65535
+            },
+            {
+                question: 'Are the variables stored on CapRover?',
+                type: 'yesno',
+                key: 'varsOnCapRover'
+            },
+            {
+                question: 'Check all of the variables used:',
+                type: 'checkboxes',
+                key: 'selectedVars',
+                options: [
+                    'MONGO_URI',
+                    'SHIPENGINE_API_KEY',
+                    'AFTERSHIP_API_KEY',
+                    'OPENAI_API_KEY',
+                    'EBAY_APP_ID',
+                    'EBAY_CERT_ID',
+                    'EBAY_DEV_ID',
+                    'SMTP_HOST',
+                    'SMTP_PORT',
+                    'SMTP_SECURE',
+                    'SMTP_USER',
+                    'SMTP_PASS',
+                    'MAIL_FROM_NAME',
+                    'MAIL_FROM_EMAIL',
+                    'MAIL_PWRESET_NAME',
+                    'MAIL_PWRESET_EMAIL',
+                    'STAXXIO_SSO_SECRET'
+                ]
+            },
+            {
+                question: 'Details on the website:',
+                type: 'textarea',
+                key: 'details',
+                placeholder: 'Describe the website functionality, features, and requirements...',
+                required: true
+            },
+            {
+                question: 'Features to start with:',
+                type: 'textarea',
+                key: 'featuresToStart',
+                placeholder: 'List the first features Cursor should implement (bullets are great).',
+                required: true
+            }
+        ];
+    }
+
+    // Discord bot wizard
+    const steps = [
+        typeStep,
+        {
+            question: 'What is the name of the Discord bot project?',
+            type: 'text',
+            key: 'projectName',
+            placeholder: 'my-discord-bot',
+            required: true
+        },
+        {
+            question: 'Select GitHub repository:',
+            type: 'select',
+            key: 'githubRepo',
+            options: repoOptions,
+            required: false
+        },
+        {
+            question: 'What is the port?',
+            type: 'number',
+            key: 'port',
+            placeholder: '3000',
+            min: 3000,
+            max: 65535
+        },
+        {
+            question: 'What command style do you want?',
+            type: 'choice',
+            key: 'discordCommandStyle',
+            required: true,
+            options: [
+                { value: 'prefix', label: 'Prefix commands', description: 'Example: !ping' },
+                { value: 'slash', label: 'Slash commands', description: 'Example: /ping' },
+                { value: 'both', label: 'Both', description: 'Support prefix + slash commands.' }
+            ]
+        }
+    ];
+
+    if (wizardData.discordCommandStyle && wizardData.discordCommandStyle !== 'slash') {
+        steps.push({
+            question: 'What prefix should the bot use?',
+            type: 'text',
+            key: 'discordPrefix',
+            placeholder: '!',
+            required: true
+        });
+    }
+
+    steps.push(
+        {
+            question: 'Are the variables stored on CapRover?',
+            type: 'yesno',
+            key: 'varsOnCapRover'
+        },
+        {
+            question: 'Check all of the variables used:',
+            type: 'checkboxes',
+            key: 'selectedVars',
+            options: [
+                'DISCORD_BOT_TOKEN',
+                'DISCORD_APPLICATION_ID',
+                'DISCORD_PUBLIC_KEY',
+                'DISCORD_GUILD_ID',
+                'DISCORD_PREFIX'
+            ]
+        },
+        {
+            question: 'Bot details / behavior:',
+            type: 'textarea',
+            key: 'details',
+            placeholder: 'Describe what the bot should do, what commands it needs, and any rules/permissions.',
+            required: true
+        },
+        {
+            question: 'Features to start with:',
+            type: 'textarea',
+            key: 'featuresToStart',
+            placeholder: 'List the first features Cursor should implement (bullets are great).',
+            required: true
+        }
+    );
+
+    return steps;
+}
 
 async function initWizard() {
     currentWizardStep = 0;
     wizardData = {
-        isWebsite: null,
-        websiteName: '',
+        wizardType: null,
+        projectName: '',
         githubRepo: '',
         darkMode: null,
         port: '',
         varsOnCapRover: null,
         selectedVars: [],
-        websiteDetails: ''
+        details: '',
+        discordCommandStyle: null,
+        discordPrefix: '!',
+        featuresToStart: ''
     };
     
     // Load GitHub repos for the dropdown
@@ -1885,14 +2018,6 @@ async function initWizard() {
             const reposData = await reposResponse.json();
             if (reposData.success) {
                 wizardRepos = reposData.repos || [];
-                // Update the select step options
-                const selectStep = wizardSteps.find(s => s.type === 'select');
-                if (selectStep) {
-                    selectStep.options = wizardRepos.map(repo => ({
-                        value: repo.html_url,
-                        label: `${repo.name} (${repo.html_url})`
-                    }));
-                }
             }
         }
     } catch (error) {
@@ -1906,8 +2031,9 @@ function renderWizardStep() {
     const wizardStepsEl = document.getElementById('wizardSteps');
     const wizardNav = document.querySelector('.wizard-navigation');
     const wizardResult = document.getElementById('wizardResult');
+    const steps = getWizardSteps();
     
-    if (currentWizardStep >= wizardSteps.length) {
+    if (currentWizardStep >= steps.length) {
         // Show result
         wizardStepsEl.style.display = 'none';
         wizardNav.style.display = 'none';
@@ -1920,15 +2046,15 @@ function renderWizardStep() {
     wizardNav.style.display = 'flex';
     wizardResult.style.display = 'none';
     
-    const step = wizardSteps[currentWizardStep];
+    const step = steps[currentWizardStep];
     let html = `
         <div class="wizard-step">
             <div class="wizard-progress" style="margin-bottom: 24px;">
                 <div style="color: var(--text-secondary); font-size: 0.9rem;">
-                    Step ${currentWizardStep + 1} of ${wizardSteps.length}
+                    Step ${currentWizardStep + 1} of ${steps.length}
                 </div>
                 <div style="width: 100%; height: 4px; background: var(--bg-secondary); border-radius: 2px; margin-top: 8px;">
-                    <div style="width: ${((currentWizardStep + 1) / wizardSteps.length) * 100}%; height: 100%; background: var(--primary-color); border-radius: 2px; transition: width 0.3s;"></div>
+                    <div style="width: ${((currentWizardStep + 1) / steps.length) * 100}%; height: 100%; background: var(--primary-color); border-radius: 2px; transition: width 0.3s;"></div>
                 </div>
             </div>
             <h3 style="margin-bottom: 24px; color: var(--text-primary);">${escapeHtml(step.question)}</h3>
@@ -1956,6 +2082,24 @@ function renderWizardStep() {
                 </button>
             </div>
         `;
+    } else if (step.type === 'choice') {
+        const value = wizardData[step.key];
+        html += `<div class="wizard-options" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 24px;">`;
+        (step.options || []).forEach(opt => {
+            const active = value === opt.value;
+            html += `
+                <button
+                    type="button"
+                    onclick="setWizardValue('${step.key}', '${escapeHtml(opt.value)}')"
+                    class="btn-secondary"
+                    style="text-align: left; align-items: flex-start; justify-content: flex-start; flex-direction: column; gap: 6px; padding: 16px; ${active ? 'background: var(--primary-color); color: white; border-color: var(--primary-color);' : ''}"
+                >
+                    <div style="font-size: 1.05rem; font-weight: 700;">${escapeHtml(opt.label)}</div>
+                    ${opt.description ? `<div style="font-size: 0.9rem; opacity: 0.9;">${escapeHtml(opt.description)}</div>` : ''}
+                </button>
+            `;
+        });
+        html += `</div>`;
     } else if (step.type === 'text') {
         html += `
             <div class="form-group">
@@ -2049,7 +2193,7 @@ function renderWizardStep() {
     const nextBtn = document.getElementById('wizardNextBtn');
     if (prevBtn) prevBtn.style.display = currentWizardStep === 0 ? 'none' : 'inline-flex';
     if (nextBtn) {
-        if (currentWizardStep === wizardSteps.length - 1) {
+        if (currentWizardStep === steps.length - 1) {
             nextBtn.textContent = 'Generate Message →';
         } else {
             nextBtn.textContent = 'Next →';
@@ -2079,7 +2223,8 @@ function toggleWizardVar(varName) {
 }
 
 function wizardNext() {
-    const step = wizardSteps[currentWizardStep];
+    const steps = getWizardSteps();
+    const step = steps[currentWizardStep];
     
     // Validate current step
     if (step.type === 'text' || step.type === 'number' || step.type === 'textarea' || step.type === 'select') {
@@ -2100,7 +2245,7 @@ function wizardNext() {
         }
         
         wizardData[step.key] = input.value.trim();
-    } else if (step.type === 'yesno' && wizardData[step.key] === null) {
+    } else if ((step.type === 'yesno' || step.type === 'choice') && (wizardData[step.key] === null || wizardData[step.key] === '')) {
         showToast('Please select an option', 'warning');
         return;
     }
@@ -2117,31 +2262,71 @@ function wizardPrevious() {
 }
 
 function generateWizardMessage() {
-    let message = `Create a ${wizardData.isWebsite ? 'website' : 'application'} called "${wizardData.websiteName}".\n\n`;
+    const type = wizardData.wizardType || 'website';
+    const name = wizardData.projectName || '(name not set)';
+    const port = wizardData.port || '3000';
+    const varsWhere = wizardData.varsOnCapRover ? 'Environment variables are stored on CapRover.' : 'Environment variables are stored locally.';
 
-    if (wizardData.githubRepo) {
-        message += `GitHub Repository: ${wizardData.githubRepo}\n\n`;
-    }
+    let message = '';
 
-    message += `This application will be hosted on CapRover. Make sure to include all necessary files for CapRover deployment, including a Dockerfile and captain-definition file.\n\n`;
+    if (type === 'website') {
+        message += `Create a website called "${name}".\n\n`;
+        if (wizardData.githubRepo) {
+            message += `GitHub Repository: ${wizardData.githubRepo}\n\n`;
+        }
 
-    message += `${wizardData.darkMode ? 'Use dark mode styling.' : 'Use light mode styling.'}\n\n`;
+        message += `This application will be hosted on CapRover. Make sure to include all necessary files for CapRover deployment, including a Dockerfile and captain-definition file.\n\n`;
+        message += `${wizardData.darkMode ? 'Use dark mode styling.' : 'Use light mode styling.'}\n\n`;
+        message += `The application should run on port ${port}.\n\n`;
+        message += `${varsWhere}\n\n`;
 
-    message += `The application should run on port ${wizardData.port || '3000'}.\n\n`;
+        if (wizardData.selectedVars.length > 0) {
+            message += `The following environment variables are used (CapRover env var names):\n${wizardData.selectedVars.map(v => `- ${v}`).join('\n')}\n\n`;
+        } else {
+            message += `No specific environment variables are required.\n\n`;
+        }
 
-    message += `${wizardData.varsOnCapRover ? 'Environment variables are stored on CapRover.' : 'Environment variables are stored locally.'}\n\n`;
-
-    if (wizardData.selectedVars.length > 0) {
-        message += `The following environment variables are used:\n${wizardData.selectedVars.map(v => `- ${v}`).join('\n')}\n\n`;
+        message += `Website Details:\n${wizardData.details}\n\n`;
+        message += `Features to start with:\n${wizardData.featuresToStart}\n\n`;
+        message += `Important: This application needs to run npm install during the build process. Make sure the Dockerfile includes npm install commands.\n\n`;
+        message += `Please create this website with all the necessary files, including server setup, frontend, and any required configurations.`;
     } else {
-        message += `No specific environment variables are required.\n\n`;
+        // Discord Bot
+        const commandStyle = wizardData.discordCommandStyle || 'prefix';
+        const prefix = wizardData.discordPrefix || '!';
+        const selectedVars = wizardData.selectedVars.length > 0
+            ? wizardData.selectedVars
+            : ['DISCORD_BOT_TOKEN', 'DISCORD_APPLICATION_ID', 'DISCORD_PUBLIC_KEY', 'DISCORD_GUILD_ID', 'DISCORD_PREFIX'];
+
+        message += `Create a Discord bot called "${name}" using Node.js and discord.js.\n\n`;
+        if (wizardData.githubRepo) {
+            message += `GitHub Repository: ${wizardData.githubRepo}\n\n`;
+        }
+
+        message += `This bot will be hosted on CapRover. Include a Dockerfile and captain-definition for CapRover deployment.\n\n`;
+        message += `Run an HTTP server on port ${port} (use process.env.PORT) with a health endpoint at /api/health.\n\n`;
+        message += `${varsWhere}\n\n`;
+        message += `CapRover environment variable names to use (include these EXACT names in the code and README):\n`;
+        message += `- PORT\n${selectedVars.map(v => `- ${v}`).join('\n')}\n\n`;
+
+        message += `Discord setup instructions to include in README:\n`;
+        message += `- Create a Discord Application at https://discord.com/developers/applications\n`;
+        message += `- Get Application ID + Public Key\n`;
+        message += `- Create a Bot, copy the Bot Token\n`;
+        message += `- Invite bot via OAuth2 URL generator (scopes: bot + applications.commands if using slash commands)\n\n`;
+
+        message += `Command style:\n- ${commandStyle}\n`;
+        if (commandStyle !== 'slash') {
+            message += `- Prefix: ${prefix}\n`;
+        }
+        message += `\n`;
+
+        message += `Bot Details / Behavior:\n${wizardData.details}\n\n`;
+        message += `Features to start with:\n${wizardData.featuresToStart}\n\n`;
+
+        message += `Important: This application needs to run npm install during the build process. Make sure the Dockerfile includes npm install commands.\n\n`;
+        message += `Please create the bot with a clean project structure, clear README, and sane defaults.`;
     }
-
-    message += `Website Details:\n${wizardData.websiteDetails}\n\n`;
-
-    message += `Important: This application needs to run npm install during the build process. Make sure the Dockerfile includes npm install commands.\n\n`;
-
-    message += `Please create this ${wizardData.isWebsite ? 'website' : 'application'} with all the necessary files, including server setup, frontend, and any required configurations.`;
 
     document.getElementById('wizardMessage').value = message;
 }

@@ -1131,6 +1131,14 @@ app.post('/api/create-website', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'Project name is required' });
     }
 
+    const repoName = String(projectName).trim();
+    if (!/^[a-z0-9-]+$/i.test(repoName)) {
+      return res.status(400).json({ error: 'Invalid project name. Only letters, numbers, and hyphens are allowed.' });
+    }
+
+    // CapRover app names should be lowercase
+    const appName = repoName.toLowerCase();
+
     if (isDomain && !domain) {
       return res.status(400).json({ error: 'Domain is required if "This is a custom domain" is checked.' });
     }
@@ -1145,8 +1153,8 @@ app.post('/api/create-website', requireAuth, async (req, res) => {
     }
     
     // Step 1: Create GitHub repository
-    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 1: Creating GitHub repository: ${projectName}`);
-    const githubResult = await createGitHubRepo(projectName, true);
+    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 1: Creating GitHub repository: ${repoName}`);
+    const githubResult = await createGitHubRepo(repoName, true);
     console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 1: ✅ GitHub repo created: ${githubResult.repoUrl}`);
     
     // Step 2: Authenticate with CapRover ONCE (needed to determine port)
@@ -1176,7 +1184,7 @@ app.post('/api/create-website', requireAuth, async (req, res) => {
     console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 3b: Pushing default starter files to GitHub with port ${containerPort}...`);
     console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 3b: Files will use PORT=${containerPort} in server.js and EXPOSE ${containerPort} in Dockerfile`);
     try {
-      await pushDefaultFilesToGitHub(GITHUB_USERNAME, projectName, branch, containerPort);
+      await pushDefaultFilesToGitHub(GITHUB_USERNAME, repoName, branch, containerPort);
       console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 3b: ✅ Default files pushed/updated to GitHub with port ${containerPort}`);
     } catch (error) {
       console.warn(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 3b: ⚠️ Could not push default files: ${error.message}. Continuing anyway...`);
@@ -1184,8 +1192,8 @@ app.post('/api/create-website', requireAuth, async (req, res) => {
     }
     
     // Step 4: Ensure app exists (idempotent)
-    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 4: Ensuring CapRover app exists: ${projectName}`);
-    const appResult = await caproverEnsureApp(baseUrl, token, projectName);
+    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 4: Ensuring CapRover app exists: ${appName}`);
+    const appResult = await caproverEnsureApp(baseUrl, token, appName);
     if (appResult.created) {
       console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 4: ✅ CapRover app created`);
     } else {
@@ -1194,7 +1202,7 @@ app.post('/api/create-website', requireAuth, async (req, res) => {
     
     // Step 5: Set Container HTTP Port
     console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 5: Setting container HTTP port to ${containerPort}...`);
-    await caproverSetContainerHttpPort(baseUrl, token, projectName, containerPort);
+    await caproverSetContainerHttpPort(baseUrl, token, appName, containerPort);
     console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 5: ✅ Container HTTP port set to ${containerPort}`);
     
     // Step 6: Set environment variables (copy from template app "a-staxxio-web")
@@ -1228,17 +1236,17 @@ app.post('/api/create-website', requireAuth, async (req, res) => {
     console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 6b: Setting PORT=${containerPort} (must match Container HTTP Port)`);
     envVars.GITHUB_USERNAME = GITHUB_USERNAME;
     envVars.GITHUB_TOKEN = GITHUB_TOKEN;
-    envVars.REPO_NAME = projectName;
+    envVars.REPO_NAME = repoName;
     envVars.REPO_URL = githubResult.cloneUrl;
     envVars.REPO_BRANCH = branch;
     
     console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 6c: Applying ${Object.keys(envVars).length} env vars to new app...`);
-    await caproverSetEnvVars(baseUrl, token, projectName, envVars);
+    await caproverSetEnvVars(baseUrl, token, appName, envVars);
     console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 6: ✅ Environment variables set (${Object.keys(envVars).length} total, PORT=${containerPort})`);
     
     // Step 7: Verify env vars were applied
     console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 7: Verifying environment variables...`);
-    const envCheck = await caproverGetEnvVars(baseUrl, token, projectName);
+    const envCheck = await caproverGetEnvVars(baseUrl, token, appName);
     
     if (!envCheck.ok) {
       console.warn(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 7: ⚠️ Could not verify env vars: ${envCheck.message}`);
@@ -1267,14 +1275,14 @@ app.post('/api/create-website', requireAuth, async (req, res) => {
     
     // Step 8: Configure GitHub deployment (optional)
     console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 8: Configuring GitHub deployment...`);
-    await caproverSetGitHubDeployment(baseUrl, token, projectName, githubResult.cloneUrl, branch, GITHUB_TOKEN, GITHUB_USERNAME, containerPort);
+    await caproverSetGitHubDeployment(baseUrl, token, appName, githubResult.cloneUrl, branch, GITHUB_TOKEN, GITHUB_USERNAME, containerPort);
     console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 8: ✅ GitHub deployment configured`);
 
     // Step 9: Set custom domains if domain is provided
     if (isDomain && domain) {
       console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 9: Setting custom domains: ${domain} and www.${domain}...`);
       const customDomains = [domain, `www.${domain}`];
-      await caproverSetCustomDomains(baseUrl, token, projectName, customDomains);
+      await caproverSetCustomDomains(baseUrl, token, appName, customDomains);
       console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 9: ✅ Custom domains set: ${customDomains.join(', ')}`);
     }
 
@@ -1284,7 +1292,7 @@ app.post('/api/create-website', requireAuth, async (req, res) => {
       message: 'Website created successfully!',
       data: {
         githubRepo: githubResult.repoUrl,
-        caproverApp: projectName,
+        caproverApp: appName,
         port: containerPort,
         branch: branch,
         isDomain: isDomain,
@@ -1314,6 +1322,13 @@ app.post('/api/create-discord-bot', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'Project name is required' });
     }
 
+    const repoName = String(projectName).trim();
+    if (!/^[a-z0-9-]+$/i.test(repoName)) {
+      return res.status(400).json({ error: 'Invalid project name. Only letters, numbers, and hyphens are allowed.' });
+    }
+
+    const appName = repoName.toLowerCase();
+
     // Validate GitHub credentials
     if (!GITHUB_TOKEN) {
       return res.status(400).json({ error: 'GitHub credentials not configured. Please set GITHUB_TOKEN environment variable.' });
@@ -1328,8 +1343,8 @@ app.post('/api/create-discord-bot', requireAuth, async (req, res) => {
     }
 
     // Step 1: Create GitHub repository
-    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 1: Creating GitHub repository: ${projectName}`);
-    const githubResult = await createGitHubRepo(projectName, true);
+    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 1: Creating GitHub repository: ${repoName}`);
+    const githubResult = await createGitHubRepo(repoName, true);
     console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 1: ✅ GitHub repo created: ${githubResult.repoUrl}`);
 
     // Step 2: Authenticate with CapRover
@@ -1357,27 +1372,27 @@ app.post('/api/create-discord-bot', requireAuth, async (req, res) => {
     // Step 3b: Push Discord bot starter files to GitHub (with correct port)
     console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 3b: Pushing Discord bot starter files to GitHub with port ${containerPort}...`);
     try {
-      await pushDefaultFilesToGitHub(GITHUB_USERNAME, projectName, branch, containerPort, 'discord-bot');
+      await pushDefaultFilesToGitHub(GITHUB_USERNAME, repoName, branch, containerPort, 'discord-bot');
       console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 3b: ✅ Discord bot files pushed/updated to GitHub`);
     } catch (error) {
       console.warn(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 3b: ⚠️ Could not push default files: ${error.message}. Continuing anyway...`);
     }
 
     // Step 4: Ensure app exists (idempotent)
-    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 4: Ensuring CapRover app exists: ${projectName}`);
-    await caproverEnsureApp(baseUrl, token, projectName);
+    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 4: Ensuring CapRover app exists: ${appName}`);
+    await caproverEnsureApp(baseUrl, token, appName);
 
     // Step 5: Set Container HTTP Port
     console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 5: Setting container HTTP port to ${containerPort}...`);
-    await caproverSetContainerHttpPort(baseUrl, token, projectName, containerPort);
+    await caproverSetContainerHttpPort(baseUrl, token, appName, containerPort);
 
     // Step 6: Set minimal env vars (PORT only; Discord vars are set in a later step)
     console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 6: Setting minimal environment variables...`);
-    await caproverSetEnvVars(baseUrl, token, projectName, { PORT: String(containerPort) });
+    await caproverSetEnvVars(baseUrl, token, appName, { PORT: String(containerPort) });
 
     // Step 7: Configure GitHub deployment
     console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 7: Configuring GitHub deployment...`);
-    await caproverSetGitHubDeployment(baseUrl, token, projectName, githubResult.cloneUrl, branch, GITHUB_TOKEN, GITHUB_USERNAME, containerPort);
+    await caproverSetGitHubDeployment(baseUrl, token, appName, githubResult.cloneUrl, branch, GITHUB_TOKEN, GITHUB_USERNAME, containerPort);
 
     console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] ✅ Discord bot created successfully!`);
     res.json({
@@ -1385,7 +1400,7 @@ app.post('/api/create-discord-bot', requireAuth, async (req, res) => {
       message: 'Discord bot created successfully!',
       data: {
         githubRepo: githubResult.repoUrl,
-        caproverApp: projectName,
+        caproverApp: appName,
         port: containerPort,
         branch: branch,
       }
