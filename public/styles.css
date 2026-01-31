@@ -510,16 +510,17 @@ footer {
     gap: 8px;
     padding: 10px 16px;
     background: var(--primary-color);
-    color: white;
+    color: white !important;
     border: none;
     border-radius: 8px;
     font-weight: 600;
     cursor: pointer;
-    text-decoration: none;
+    text-decoration: none !important;
     transition: all 0.2s;
     font-size: 0.95rem;
     width: fit-content;
     font-family: inherit;
+    white-space: nowrap;
 }
 
 .modal-link-btn:hover {
@@ -532,6 +533,13 @@ footer {
     content: '↗';
     font-size: 1rem;
     margin-left: 4px;
+}
+
+/* Ensure action buttons stay readable inside result items */
+.result-item a.modal-link-btn,
+.result-item a.modal-link-btn:hover {
+    color: white !important;
+    text-decoration: none !important;
 }
 
 /* Modal Styles */
