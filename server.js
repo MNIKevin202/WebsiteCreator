@@ -468,10 +468,23 @@ const PORT = process.env.PORT || ${containerPort};
 
 // Discord env vars (set these in CapRover → App Configs → Environment Variables)
 const DISCORD_APPLICATION_ID = process.env.DISCORD_APPLICATION_ID || '';
+const DISCORD_SECRET = process.env.DISCORD_SECRET || '';
 const DISCORD_PUBLIC_KEY = process.env.DISCORD_PUBLIC_KEY || '';
 const DISCORD_GUILD_ID = process.env.DISCORD_GUILD_ID || '';
 const DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN || '';
 const DISCORD_PREFIX = process.env.DISCORD_PREFIX || '!';
+const DISCORD_PREFIX_ENABLED = (process.env.DISCORD_PREFIX_ENABLED ?? 'true').toString().toLowerCase() === 'true';
+
+// Optional additional env vars (you can ignore until you need them)
+const mongoDB_URI = process.env.mongoDB_URI || '';
+const mongoDB_DB = process.env.mongoDB_DB || '';
+const mongoDB_User = process.env.mongoDB_User || '';
+const mongoDB_Password = process.env.mongoDB_Password || '';
+const admin_role_ID = process.env.admin_role_ID || '';
+const mod_role_ID = process.env.mod_role_ID || '';
+const member_role_ID = process.env.member_role_ID || '';
+const mongodb_atlas_email = process.env.mongodb_atlas_email || '';
+const mongodb_atlas_password = process.env.mongodb_atlas_password || '';
 
 // Health check endpoint (CapRover-friendly)
 app.get('/api/health', (req, res) => {
@@ -481,8 +494,15 @@ app.get('/api/health', (req, res) => {
     discord: {
       hasToken: !!DISCORD_BOT_TOKEN,
       hasApplicationId: !!DISCORD_APPLICATION_ID,
+      hasSecret: !!DISCORD_SECRET,
       hasPublicKey: !!DISCORD_PUBLIC_KEY,
       hasGuildId: !!DISCORD_GUILD_ID,
+      prefixEnabled: DISCORD_PREFIX_ENABLED,
+    },
+    mongo: {
+      hasMongoUri: !!mongoDB_URI,
+      db: mongoDB_DB ? 'set' : '',
+      user: mongoDB_User ? 'set' : '',
     },
   });
 });
@@ -507,6 +527,7 @@ client.once('ready', () => {
 
 client.on('messageCreate', async (message) => {
   try {
+    if (!DISCORD_PREFIX_ENABLED) return;
     if (!message || !message.content) return;
     if (message.author?.bot) return;
     const content = message.content.trim();
@@ -595,9 +616,23 @@ Auto-generated Discord bot (CapRover + GitHub).
 - \`DISCORD_BOT_TOKEN\` (required)
 - \`DISCORD_APPLICATION_ID\` (recommended)
 - \`DISCORD_PUBLIC_KEY\` (recommended)
+- \`DISCORD_SECRET\` (optional)
 - \`DISCORD_GUILD_ID\` (optional)
 - \`DISCORD_PREFIX\` (optional, default \`!\`)
+- \`DISCORD_PREFIX_ENABLED\` (optional, default \`true\`)
 - \`PORT\` (required by CapRover; set automatically)
+
+## Optional environment variables
+
+- \`mongoDB_URI\`
+- \`mongoDB_DB\`
+- \`mongoDB_User\`
+- \`mongoDB_Password\`
+- \`admin_role_ID\`
+- \`mod_role_ID\`
+- \`member_role_ID\`
+- \`mongodb_atlas_email\`
+- \`mongodb_atlas_password\`
 
 ## Local run
 
@@ -1425,18 +1460,54 @@ app.post('/api/apps/:appName/discord-bot-config', requireAuth, async (req, res) 
       return res.status(400).json({ success: false, error: 'CapRover credentials not configured' });
     }
 
-    const {
-      applicationId,
-      publicKey,
-      botToken,
-      guildId,
-    } = req.body || {};
+    const body = req.body || {};
 
-    if (!applicationId || !publicKey || !botToken) {
+    // Support both legacy keys and direct env-var keys
+    const envKeys = [
+      'DISCORD_APPLICATION_ID',
+      'DISCORD_SECRET',
+      'DISCORD_PUBLIC_KEY',
+      'DISCORD_BOT_TOKEN',
+      'DISCORD_PREFIX',
+      'DISCORD_PREFIX_ENABLED',
+      'DISCORD_GUILD_ID',
+      'mongoDB_URI',
+      'mongoDB_DB',
+      'mongoDB_User',
+      'mongoDB_Password',
+      'admin_role_ID',
+      'mod_role_ID',
+      'member_role_ID',
+      'mongodb_atlas_email',
+      'mongodb_atlas_password',
+    ];
+
+    const picked = {};
+
+    // Legacy aliases
+    if (body.applicationId && !body.DISCORD_APPLICATION_ID) picked.DISCORD_APPLICATION_ID = body.applicationId;
+    if (body.publicKey && !body.DISCORD_PUBLIC_KEY) picked.DISCORD_PUBLIC_KEY = body.publicKey;
+    if (body.botToken && !body.DISCORD_BOT_TOKEN) picked.DISCORD_BOT_TOKEN = body.botToken;
+    if (body.guildId && !body.DISCORD_GUILD_ID) picked.DISCORD_GUILD_ID = body.guildId;
+
+    // Direct keys
+    envKeys.forEach((k) => {
+      if (body[k] !== undefined && body[k] !== null && String(body[k]).trim() !== '') {
+        picked[k] = String(body[k]).trim();
+      }
+    });
+
+    if (!picked.DISCORD_APPLICATION_ID || !picked.DISCORD_PUBLIC_KEY || !picked.DISCORD_BOT_TOKEN) {
       return res.status(400).json({
         success: false,
-        error: 'applicationId, publicKey, and botToken are required'
+        error: 'DISCORD_APPLICATION_ID, DISCORD_PUBLIC_KEY, and DISCORD_BOT_TOKEN are required'
       });
+    }
+
+    // Normalize boolean flag if provided
+    if (picked.DISCORD_PREFIX_ENABLED !== undefined) {
+      const v = String(picked.DISCORD_PREFIX_ENABLED).trim().toLowerCase();
+      picked.DISCORD_PREFIX_ENABLED = (v === 'true' || v === '1' || v === 'yes') ? 'true' : 'false';
     }
 
     const baseUrl = CAPROVER_URL.replace(/\/+$/, '');
@@ -1457,15 +1528,8 @@ app.post('/api/apps/:appName/discord-bot-config', requireAuth, async (req, res) 
 
     const merged = {
       ...existingEnvObj,
-      DISCORD_APPLICATION_ID: String(applicationId).trim(),
-      DISCORD_PUBLIC_KEY: String(publicKey).trim(),
-      DISCORD_BOT_TOKEN: String(botToken).trim(),
+      ...picked,
     };
-
-    const guildIdTrimmed = String(guildId || '').trim();
-    if (guildIdTrimmed) {
-      merged.DISCORD_GUILD_ID = guildIdTrimmed;
-    }
 
     await caproverSetEnvVars(baseUrl, token, appName, merged);
 

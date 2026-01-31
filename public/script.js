@@ -1345,17 +1345,22 @@ if (discordForm) {
                     </div>
 
                     <div class="form-group" style="width: 100%; margin: 0;">
-                        <label for="discordSetupApplicationId">Application ID *</label>
+                        <label for="discordSetupApplicationId">DISCORD_APPLICATION_ID *</label>
                         <input type="text" id="discordSetupApplicationId" placeholder="123456789012345678" autocomplete="off">
                         <small>Discord Developer Portal → your Application → General Information</small>
                     </div>
                     <div class="form-group" style="width: 100%; margin: 0;">
-                        <label for="discordSetupPublicKey">Public Key *</label>
+                        <label for="discordSetupSecret">DISCORD_SECRET (optional)</label>
+                        <input type="password" id="discordSetupSecret" placeholder="(client secret)" autocomplete="off">
+                        <small>Optional: needed if you build OAuth/dashboard features</small>
+                    </div>
+                    <div class="form-group" style="width: 100%; margin: 0;">
+                        <label for="discordSetupPublicKey">DISCORD_PUBLIC_KEY *</label>
                         <input type="text" id="discordSetupPublicKey" placeholder="(public key)" autocomplete="off">
                         <small>Discord Developer Portal → your Application → General Information</small>
                     </div>
                     <div class="form-group" style="width: 100%; margin: 0;">
-                        <label for="discordSetupBotToken">Bot Token *</label>
+                        <label for="discordSetupBotToken">DISCORD_BOT_TOKEN *</label>
                         <div style="display: flex; gap: 10px; align-items: stretch; width: 100%;">
                             <input type="password" id="discordSetupBotToken" placeholder="(bot token)" autocomplete="off" style="flex: 1; min-width: 0;">
                             <button type="button" class="btn-secondary" style="width: auto; padding: 10px 14px; flex-shrink: 0;" onclick="toggleDiscordTokenVisibility()">
@@ -1365,9 +1370,70 @@ if (discordForm) {
                         <small>Discord Developer Portal → Bot → Reset Token</small>
                     </div>
                     <div class="form-group" style="width: 100%; margin: 0;">
-                        <label for="discordSetupGuildId">Guild (Server) ID (optional)</label>
+                        <label for="discordSetupPrefix">DISCORD_PREFIX</label>
+                        <input type="text" id="discordSetupPrefix" placeholder="!" autocomplete="off">
+                        <small>Used for prefix commands (if enabled)</small>
+                    </div>
+                    <div class="form-group" style="width: 100%; margin: 0;">
+                        <label for="discordSetupPrefixEnabled">DISCORD_PREFIX_ENABLED</label>
+                        <select id="discordSetupPrefixEnabled" style="width: 100%; padding: 14px 18px; background: var(--bg-color); border: 2px solid var(--border-color); border-radius: 12px; color: var(--text-primary); font-size: 1rem; cursor: pointer;">
+                            <option value="true" selected>True</option>
+                            <option value="false">False</option>
+                        </select>
+                        <small>Enable/disable prefix command parsing</small>
+                    </div>
+                    <div class="form-group" style="width: 100%; margin: 0;">
+                        <label for="discordSetupGuildId">DISCORD_GUILD_ID (optional)</label>
                         <input type="text" id="discordSetupGuildId" placeholder="(optional)" autocomplete="off">
                         <small>Optional: useful for dev-only commands or server-specific config</small>
+                    </div>
+
+                    <div style="width: 100%; margin-top: 8px; padding-top: 12px; border-top: 1px solid var(--border-color);">
+                        <strong style="color: var(--text-primary); font-size: 0.95rem;">MongoDB (optional)</strong>
+                    </div>
+                    <div class="form-group" style="width: 100%; margin: 0;">
+                        <label for="mongoDB_URI">mongoDB_URI</label>
+                        <input type="text" id="mongoDB_URI" placeholder="mongodb://..." autocomplete="off">
+                    </div>
+                    <div class="form-group" style="width: 100%; margin: 0;">
+                        <label for="mongoDB_DB">mongoDB_DB</label>
+                        <input type="text" id="mongoDB_DB" placeholder="database name" autocomplete="off">
+                    </div>
+                    <div class="form-group" style="width: 100%; margin: 0;">
+                        <label for="mongoDB_User">mongoDB_User</label>
+                        <input type="text" id="mongoDB_User" placeholder="username" autocomplete="off">
+                    </div>
+                    <div class="form-group" style="width: 100%; margin: 0;">
+                        <label for="mongoDB_Password">mongoDB_Password</label>
+                        <input type="password" id="mongoDB_Password" placeholder="password" autocomplete="off">
+                    </div>
+
+                    <div style="width: 100%; margin-top: 8px; padding-top: 12px; border-top: 1px solid var(--border-color);">
+                        <strong style="color: var(--text-primary); font-size: 0.95rem;">Role IDs (optional)</strong>
+                    </div>
+                    <div class="form-group" style="width: 100%; margin: 0;">
+                        <label for="admin_role_ID">admin_role_ID</label>
+                        <input type="text" id="admin_role_ID" placeholder="role id" autocomplete="off">
+                    </div>
+                    <div class="form-group" style="width: 100%; margin: 0;">
+                        <label for="mod_role_ID">mod_role_ID</label>
+                        <input type="text" id="mod_role_ID" placeholder="role id" autocomplete="off">
+                    </div>
+                    <div class="form-group" style="width: 100%; margin: 0;">
+                        <label for="member_role_ID">member_role_ID</label>
+                        <input type="text" id="member_role_ID" placeholder="role id" autocomplete="off">
+                    </div>
+
+                    <div style="width: 100%; margin-top: 8px; padding-top: 12px; border-top: 1px solid var(--border-color);">
+                        <strong style="color: var(--text-primary); font-size: 0.95rem;">MongoDB Atlas (optional)</strong>
+                    </div>
+                    <div class="form-group" style="width: 100%; margin: 0;">
+                        <label for="mongodb_atlas_email">mongodb_atlas_email</label>
+                        <input type="text" id="mongodb_atlas_email" placeholder="email" autocomplete="off">
+                    </div>
+                    <div class="form-group" style="width: 100%; margin: 0;">
+                        <label for="mongodb_atlas_password">mongodb_atlas_password</label>
+                        <input type="password" id="mongodb_atlas_password" placeholder="password" autocomplete="off">
                     </div>
                     <div style="display: flex; gap: 10px; flex-wrap: wrap; width: 100%; margin-top: 4px;">
                         <button type="button" class="btn-primary" style="width: auto;" onclick="saveDiscordBotConfig()">
@@ -1378,7 +1444,7 @@ if (discordForm) {
                         </button>
                     </div>
                     <small style="color: var(--text-muted);">
-                        This will set these CapRover env vars on <strong>${escapeHtml(caproverApp)}</strong>: DISCORD_APPLICATION_ID, DISCORD_PUBLIC_KEY, DISCORD_BOT_TOKEN (+ optional DISCORD_GUILD_ID)
+                        This will set CapRover env vars on <strong>${escapeHtml(caproverApp)}</strong>. Use “Copy Env Var Names” if you want the full list.
                     </small>
                 </div>
             `;
@@ -1423,9 +1489,22 @@ function toggleDiscordTokenVisibility() {
 function copyDiscordEnvVarList() {
     const envVarNames = [
         'DISCORD_APPLICATION_ID',
+        'DISCORD_SECRET',
         'DISCORD_PUBLIC_KEY',
         'DISCORD_BOT_TOKEN',
+        'DISCORD_PREFIX',
+        'DISCORD_PREFIX_ENABLED',
         'DISCORD_GUILD_ID'
+        ,
+        'mongoDB_URI',
+        'mongoDB_DB',
+        'mongoDB_User',
+        'mongoDB_Password',
+        'admin_role_ID',
+        'mod_role_ID',
+        'member_role_ID',
+        'mongodb_atlas_email',
+        'mongodb_atlas_password'
     ].join('\n');
     copyToClipboard(envVarNames);
 }
@@ -1437,12 +1516,27 @@ async function saveDiscordBotConfig() {
     }
 
     const applicationId = document.getElementById('discordSetupApplicationId')?.value?.trim() || '';
+    const secret = document.getElementById('discordSetupSecret')?.value?.trim() || '';
     const publicKey = document.getElementById('discordSetupPublicKey')?.value?.trim() || '';
     const botToken = document.getElementById('discordSetupBotToken')?.value?.trim() || '';
+    const prefix = document.getElementById('discordSetupPrefix')?.value?.trim() || '';
+    const prefixEnabled = document.getElementById('discordSetupPrefixEnabled')?.value || 'true';
     const guildId = document.getElementById('discordSetupGuildId')?.value?.trim() || '';
 
+    const mongoDB_URI = document.getElementById('mongoDB_URI')?.value?.trim() || '';
+    const mongoDB_DB = document.getElementById('mongoDB_DB')?.value?.trim() || '';
+    const mongoDB_User = document.getElementById('mongoDB_User')?.value?.trim() || '';
+    const mongoDB_Password = document.getElementById('mongoDB_Password')?.value?.trim() || '';
+
+    const admin_role_ID = document.getElementById('admin_role_ID')?.value?.trim() || '';
+    const mod_role_ID = document.getElementById('mod_role_ID')?.value?.trim() || '';
+    const member_role_ID = document.getElementById('member_role_ID')?.value?.trim() || '';
+
+    const mongodb_atlas_email = document.getElementById('mongodb_atlas_email')?.value?.trim() || '';
+    const mongodb_atlas_password = document.getElementById('mongodb_atlas_password')?.value?.trim() || '';
+
     if (!applicationId || !publicKey || !botToken) {
-        showErrorModal('Missing Discord Values', 'Application ID, Public Key, and Bot Token are required to run the bot.');
+        showErrorModal('Missing Discord Values', 'DISCORD_APPLICATION_ID, DISCORD_PUBLIC_KEY, and DISCORD_BOT_TOKEN are required to run the bot.');
         return;
     }
 
@@ -1451,7 +1545,24 @@ async function saveDiscordBotConfig() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
-            body: JSON.stringify({ applicationId, publicKey, botToken, guildId })
+            body: JSON.stringify({
+                DISCORD_APPLICATION_ID: applicationId,
+                DISCORD_SECRET: secret,
+                DISCORD_PUBLIC_KEY: publicKey,
+                DISCORD_BOT_TOKEN: botToken,
+                DISCORD_PREFIX: prefix,
+                DISCORD_PREFIX_ENABLED: prefixEnabled,
+                DISCORD_GUILD_ID: guildId,
+                mongoDB_URI,
+                mongoDB_DB,
+                mongoDB_User,
+                mongoDB_Password,
+                admin_role_ID,
+                mod_role_ID,
+                member_role_ID,
+                mongodb_atlas_email,
+                mongodb_atlas_password
+            })
         });
 
         if (response.status === 401) {
@@ -1807,6 +1918,7 @@ let wizardData = {
     details: '',
     discordCommandStyle: null, // 'prefix' | 'slash' | 'both'
     discordPrefix: '!',
+    discordDashboard: null,
     featuresToStart: ''
 };
 
@@ -1960,6 +2072,11 @@ function getWizardSteps() {
 
     steps.push(
         {
+            question: 'Do you want to build a dashboard website for this Discord bot?',
+            type: 'yesno',
+            key: 'discordDashboard'
+        },
+        {
             question: 'Are the variables stored on CapRover?',
             type: 'yesno',
             key: 'varsOnCapRover'
@@ -1969,11 +2086,22 @@ function getWizardSteps() {
             type: 'checkboxes',
             key: 'selectedVars',
             options: [
-                'DISCORD_BOT_TOKEN',
                 'DISCORD_APPLICATION_ID',
+                'DISCORD_SECRET',
                 'DISCORD_PUBLIC_KEY',
+                'DISCORD_BOT_TOKEN',
                 'DISCORD_GUILD_ID',
-                'DISCORD_PREFIX'
+                'DISCORD_PREFIX',
+                'DISCORD_PREFIX_ENABLED',
+                'mongoDB_URI',
+                'mongoDB_DB',
+                'mongoDB_User',
+                'mongoDB_Password',
+                'admin_role_ID',
+                'mod_role_ID',
+                'member_role_ID',
+                'mongodb_atlas_email',
+                'mongodb_atlas_password'
             ]
         },
         {
@@ -2008,6 +2136,7 @@ async function initWizard() {
         details: '',
         discordCommandStyle: null,
         discordPrefix: '!',
+        discordDashboard: null,
         featuresToStart: ''
     };
     
@@ -2288,6 +2417,7 @@ function generateWizardMessage() {
 
         message += `Website Details:\n${wizardData.details}\n\n`;
         message += `Features to start with:\n${wizardData.featuresToStart}\n\n`;
+        message += `Also create a Windows batch file in the repo (e.g. push_to_github.bat) that can auto-push changes to GitHub (git add/commit/push). Include usage instructions in the README.\n\n`;
         message += `Important: This application needs to run npm install during the build process. Make sure the Dockerfile includes npm install commands.\n\n`;
         message += `Please create this website with all the necessary files, including server setup, frontend, and any required configurations.`;
     } else {
@@ -2296,7 +2426,24 @@ function generateWizardMessage() {
         const prefix = wizardData.discordPrefix || '!';
         const selectedVars = wizardData.selectedVars.length > 0
             ? wizardData.selectedVars
-            : ['DISCORD_BOT_TOKEN', 'DISCORD_APPLICATION_ID', 'DISCORD_PUBLIC_KEY', 'DISCORD_GUILD_ID', 'DISCORD_PREFIX'];
+            : [
+                'DISCORD_APPLICATION_ID',
+                'DISCORD_SECRET',
+                'DISCORD_PUBLIC_KEY',
+                'DISCORD_BOT_TOKEN',
+                'DISCORD_PREFIX',
+                'DISCORD_PREFIX_ENABLED',
+                'DISCORD_GUILD_ID',
+                'mongoDB_URI',
+                'mongoDB_DB',
+                'mongoDB_User',
+                'mongoDB_Password',
+                'admin_role_ID',
+                'mod_role_ID',
+                'member_role_ID',
+                'mongodb_atlas_email',
+                'mongodb_atlas_password'
+            ];
 
         message += `Create a Discord bot called "${name}" using Node.js and discord.js.\n\n`;
         if (wizardData.githubRepo) {
@@ -2321,9 +2468,14 @@ function generateWizardMessage() {
         }
         message += `\n`;
 
+        if (wizardData.discordDashboard) {
+            message += `Dashboard requirement:\n- Build a web-based dashboard website for this Discord bot to manage commands/data/tools/etc.\n- Include authentication and an admin/mod role based permission system.\n\n`;
+        }
+
         message += `Bot Details / Behavior:\n${wizardData.details}\n\n`;
         message += `Features to start with:\n${wizardData.featuresToStart}\n\n`;
 
+        message += `Also create a Windows batch file in the repo (e.g. push_to_github.bat) that can auto-push changes to GitHub (git add/commit/push). Include usage instructions in the README.\n\n`;
         message += `Important: This application needs to run npm install during the build process. Make sure the Dockerfile includes npm install commands.\n\n`;
         message += `Please create the bot with a clean project structure, clear README, and sane defaults.`;
     }
