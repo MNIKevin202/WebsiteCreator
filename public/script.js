@@ -56,6 +56,8 @@ function showPage(pageName) {
         loadManage();
     } else if (pageName === 'wizard') {
         initWizard();
+    } else if (pageName === 'discord') {
+        // Nothing to pre-load right now (kept for symmetry / future)
     }
 }
 
@@ -1124,7 +1126,7 @@ form.addEventListener('submit', async (e) => {
         if (data.success) {
             // Show success result
             const githubRepoUrl = data.data.githubRepo;
-            const webhookUrl = githubRepoUrl + '/settings/hooks';
+            const webhookUrl = githubRepoUrl + '/settings/hooks/new';
             let resultHtml = `
                 <div class="result-item" style="flex-direction: column; align-items: flex-start; gap: 8px;">
                     <strong>GitHub Repo:</strong>
@@ -1233,14 +1235,250 @@ function resetForm() {
     form.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
+// =========================
+// Create Discord Bot
+// =========================
+const discordForm = document.getElementById('createDiscordBotForm');
+const discordSubmitBtn = document.getElementById('discordSubmitBtn');
+const discordResultCard = document.getElementById('discordResult');
+const discordErrorCard = document.getElementById('discordError');
+const discordResultContent = document.getElementById('discordResultContent');
+const discordErrorContent = document.getElementById('discordErrorContent');
+
+let lastCreatedDiscordBotApp = null;
+
+if (discordForm) {
+    discordForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        // Hide previous results
+        discordResultCard.style.display = 'none';
+        discordErrorCard.style.display = 'none';
+
+        // Disable submit button and show loading
+        discordSubmitBtn.disabled = true;
+        const btnText = discordSubmitBtn.querySelector('.btn-text');
+        const btnLoader = discordSubmitBtn.querySelector('.btn-loader');
+        btnText.style.display = 'none';
+        btnLoader.style.display = 'inline-block';
+
+        const formData = {
+            projectName: document.getElementById('discordProjectName').value.trim(),
+            branch: document.getElementById('discordBranch').value.trim() || 'main',
+            port: document.getElementById('discordPort').value.trim() || null,
+        };
+
+        try {
+            const response = await fetch('/api/create-discord-bot', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                credentials: 'include',
+                body: JSON.stringify(formData)
+            });
+
+            if (response.status === 401) {
+                showLogin();
+                throw new Error('Session expired. Please login again.');
+            }
+
+            const data = await response.json();
+
+            if (!data.success) {
+                throw new Error(data.error || 'Unknown error occurred');
+            }
+
+            lastCreatedDiscordBotApp = data.data.caproverApp;
+
+            const githubRepoUrl = data.data.githubRepo;
+            const webhookUrl = githubRepoUrl + '/settings/hooks/new';
+            const caproverApp = data.data.caproverApp;
+
+            const discordPortalUrl = 'https://discord.com/developers/applications';
+
+            const resultHtml = `
+                <div class="result-item" style="flex-direction: column; align-items: flex-start; gap: 8px;">
+                    <strong>GitHub Repo:</strong>
+                    <div style="display: flex; align-items: center; gap: 8px; width: 100%;">
+                        <a href="${githubRepoUrl}" target="_blank" style="flex: 1; color: var(--primary-color); text-decoration: none; word-break: break-all;">${githubRepoUrl}</a>
+                        <button onclick="copyToClipboard('${githubRepoUrl}', this)" class="btn-secondary" style="width: auto; padding: 8px 16px; font-size: 0.85rem; flex-shrink: 0;">
+                            📋 Copy
+                        </button>
+                    </div>
+                </div>
+                <div class="result-item" style="flex-direction: column; align-items: flex-start; gap: 8px;">
+                    <strong>Webhook Settings:</strong>
+                    <a href="${webhookUrl}" target="_blank" style="color: var(--primary-color); text-decoration: none; word-break: break-all;">${webhookUrl}</a>
+                </div>
+                <div class="result-item">
+                    <strong>CapRover App:</strong>
+                    <span>${escapeHtml(caproverApp)}</span>
+                    <a href="https://captain.kpanel.xyz/#/apps/details/${escapeHtml(caproverApp)}" target="_blank" class="modal-link-btn" style="margin-left: 12px; padding: 6px 12px; font-size: 0.85rem; display: inline-flex; align-items: center; color: white !important;">
+                        Open in CapRover
+                    </a>
+                </div>
+                <div class="result-item">
+                    <strong>Container Port:</strong>
+                    <span>${data.data.port}</span>
+                </div>
+                <div class="result-item">
+                    <strong>Branch:</strong>
+                    <span>${escapeHtml(data.data.branch)}</span>
+                </div>
+
+                <div class="result-item" style="flex-direction: column; align-items: flex-start; gap: 12px; margin-top: 16px; padding: 20px; background: var(--bg-secondary); border: 2px solid var(--primary-color); border-radius: 12px;">
+                    <strong style="color: var(--primary-color); font-size: 1.1rem;">🤖 Discord Bot Setup (Required)</strong>
+                    <ol style="margin: 0; padding-left: 18px; color: var(--text-secondary);">
+                        <li>Open the Discord Developer Portal and create a new application.</li>
+                        <li>Copy your <strong>Application ID</strong> and <strong>Public Key</strong> from “General Information”.</li>
+                        <li>Go to “Bot” → create a bot (if needed) → <strong>Reset Token</strong> and copy the bot token.</li>
+                        <li>Enable intents your bot needs (often “Message Content Intent” for prefix commands).</li>
+                        <li>Invite the bot to your server: “OAuth2” → “URL Generator” → scopes: <strong>bot</strong> (+ <strong>applications.commands</strong> if you’ll use slash commands).</li>
+                        <li>Paste the values below and click “Save to CapRover”.</li>
+                    </ol>
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                        <a href="${discordPortalUrl}" target="_blank" class="modal-link-btn" style="cursor: pointer; border: none;">
+                            Open Discord Developer Portal
+                        </a>
+                    </div>
+
+                    <div class="form-group" style="width: 100%; margin: 0;">
+                        <label for="discordSetupApplicationId">Application ID *</label>
+                        <input type="text" id="discordSetupApplicationId" placeholder="123456789012345678" autocomplete="off">
+                        <small>Discord Developer Portal → your Application → General Information</small>
+                    </div>
+                    <div class="form-group" style="width: 100%; margin: 0;">
+                        <label for="discordSetupPublicKey">Public Key *</label>
+                        <input type="text" id="discordSetupPublicKey" placeholder="(public key)" autocomplete="off">
+                        <small>Discord Developer Portal → your Application → General Information</small>
+                    </div>
+                    <div class="form-group" style="width: 100%; margin: 0;">
+                        <label for="discordSetupBotToken">Bot Token *</label>
+                        <div style="display: flex; gap: 10px; align-items: stretch; width: 100%;">
+                            <input type="password" id="discordSetupBotToken" placeholder="(bot token)" autocomplete="off" style="flex: 1; min-width: 0;">
+                            <button type="button" class="btn-secondary" style="width: auto; padding: 10px 14px; flex-shrink: 0;" onclick="toggleDiscordTokenVisibility()">
+                                Show
+                            </button>
+                        </div>
+                        <small>Discord Developer Portal → Bot → Reset Token</small>
+                    </div>
+                    <div class="form-group" style="width: 100%; margin: 0;">
+                        <label for="discordSetupGuildId">Guild (Server) ID (optional)</label>
+                        <input type="text" id="discordSetupGuildId" placeholder="(optional)" autocomplete="off">
+                        <small>Optional: useful for dev-only commands or server-specific config</small>
+                    </div>
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap; width: 100%; margin-top: 4px;">
+                        <button type="button" class="btn-primary" style="width: auto;" onclick="saveDiscordBotConfig()">
+                            Save Discord Settings to CapRover
+                        </button>
+                        <button type="button" class="btn-secondary" style="width: auto;" onclick="copyDiscordEnvVarList()">
+                            Copy Env Var Names
+                        </button>
+                    </div>
+                    <small style="color: var(--text-muted);">
+                        This will set these CapRover env vars on <strong>${escapeHtml(caproverApp)}</strong>: DISCORD_APPLICATION_ID, DISCORD_PUBLIC_KEY, DISCORD_BOT_TOKEN (+ optional DISCORD_GUILD_ID)
+                    </small>
+                </div>
+            `;
+
+            discordResultContent.innerHTML = resultHtml;
+            discordResultCard.style.display = 'block';
+            discordResultCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        } catch (error) {
+            discordErrorContent.textContent = error.message || 'Failed to create Discord bot. Please check your configuration.';
+            discordErrorCard.style.display = 'block';
+            discordErrorCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        } finally {
+            discordSubmitBtn.disabled = false;
+            const btnText = discordSubmitBtn.querySelector('.btn-text');
+            const btnLoader = discordSubmitBtn.querySelector('.btn-loader');
+            btnText.style.display = 'inline-block';
+            btnLoader.style.display = 'none';
+        }
+    });
+}
+
+function resetDiscordBotForm() {
+    if (discordForm) discordForm.reset();
+    const portInput = document.getElementById('discordPort');
+    if (portInput) portInput.value = '';
+    discordResultCard.style.display = 'none';
+    discordErrorCard.style.display = 'none';
+    lastCreatedDiscordBotApp = null;
+    if (discordForm) discordForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function toggleDiscordTokenVisibility() {
+    const tokenInput = document.getElementById('discordSetupBotToken');
+    if (!tokenInput) return;
+    tokenInput.type = tokenInput.type === 'password' ? 'text' : 'password';
+    const btn = (typeof event !== 'undefined') ? (event.currentTarget || event.target) : null;
+    if (btn && btn.textContent) {
+        btn.textContent = tokenInput.type === 'password' ? 'Show' : 'Hide';
+    }
+}
+
+function copyDiscordEnvVarList() {
+    const envVarNames = [
+        'DISCORD_APPLICATION_ID',
+        'DISCORD_PUBLIC_KEY',
+        'DISCORD_BOT_TOKEN',
+        'DISCORD_GUILD_ID'
+    ].join('\n');
+    copyToClipboard(envVarNames);
+}
+
+async function saveDiscordBotConfig() {
+    if (!lastCreatedDiscordBotApp) {
+        showErrorModal('No App Selected', 'Create a Discord bot first so we know which CapRover app to update.');
+        return;
+    }
+
+    const applicationId = document.getElementById('discordSetupApplicationId')?.value?.trim() || '';
+    const publicKey = document.getElementById('discordSetupPublicKey')?.value?.trim() || '';
+    const botToken = document.getElementById('discordSetupBotToken')?.value?.trim() || '';
+    const guildId = document.getElementById('discordSetupGuildId')?.value?.trim() || '';
+
+    if (!applicationId || !publicKey || !botToken) {
+        showErrorModal('Missing Discord Values', 'Application ID, Public Key, and Bot Token are required to run the bot.');
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/apps/${encodeURIComponent(lastCreatedDiscordBotApp)}/discord-bot-config`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ applicationId, publicKey, botToken, guildId })
+        });
+
+        if (response.status === 401) {
+            showLogin();
+            throw new Error('Session expired. Please login again.');
+        }
+
+        const data = await response.json();
+        if (!data.success) {
+            throw new Error(data.error || 'Failed to save Discord settings');
+        }
+
+        showToast('Saved Discord settings to CapRover', 'success');
+    } catch (error) {
+        showErrorModal('Save Failed', error.message || 'Failed to save Discord settings. Please try again.');
+    }
+}
+
 // Generate an available port
-async function generatePort() {
-    const portInput = document.getElementById('port');
-    const generateBtn = event.target;
-    const originalText = generateBtn.textContent;
+async function generatePort(inputId = 'port', btnEl = null) {
+    const portInput = document.getElementById(inputId);
+    const generateBtn = btnEl || (typeof event !== 'undefined' ? (event.currentTarget || event.target) : null);
+    const originalText = generateBtn ? generateBtn.textContent : null;
     
-    generateBtn.disabled = true;
-    generateBtn.textContent = 'Generating...';
+    if (generateBtn) {
+        generateBtn.disabled = true;
+        generateBtn.textContent = 'Generating...';
+    }
     
     try {
         const response = await fetch('/api/generate-port', {
@@ -1256,7 +1494,7 @@ async function generatePort() {
         const data = await response.json();
         
         if (data.success && data.port) {
-            portInput.value = data.port;
+            if (portInput) portInput.value = data.port;
             showToast(`Generated port: ${data.port}`, 'success');
         } else {
             throw new Error(data.error || 'Failed to generate port');
@@ -1264,8 +1502,10 @@ async function generatePort() {
     } catch (error) {
         showErrorModal('Port Generation Failed', error.message || 'Failed to generate an available port. Please try again.');
     } finally {
-        generateBtn.disabled = false;
-        generateBtn.textContent = originalText;
+        if (generateBtn) {
+            generateBtn.disabled = false;
+            generateBtn.textContent = originalText;
+        }
     }
 }
 
@@ -1477,11 +1717,16 @@ function openHostingerDNS(domain) {
 // Copy to clipboard utility function
 function copyToClipboard(text, buttonElement) {
     navigator.clipboard.writeText(text).then(() => {
+        if (!buttonElement) {
+            showToast('Copied to clipboard', 'success');
+            return;
+        }
+
         const originalText = buttonElement.textContent;
         buttonElement.textContent = '✓ Copied!';
         buttonElement.style.background = 'var(--success-color)';
         buttonElement.style.borderColor = 'var(--success-color)';
-        
+
         setTimeout(() => {
             buttonElement.textContent = originalText;
             buttonElement.style.background = '';

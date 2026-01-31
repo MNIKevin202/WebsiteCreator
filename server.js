@@ -306,13 +306,12 @@ async function deleteGitHubRepo(repoName) {
 }
 
 // Push default starter files to GitHub repository
-async function pushDefaultFilesToGitHub(repoOwner, repoName, branch = 'main', containerPort = 3000) {
+async function pushDefaultFilesToGitHub(repoOwner, repoName, branch = 'main', containerPort = 3000, templateType = 'website') {
   try {
-    console.log(`[${new Date().toISOString()}] Pushing default files to GitHub repo: ${repoOwner}/${repoName} with port ${containerPort}`);
+    console.log(`[${new Date().toISOString()}] Pushing default files to GitHub repo: ${repoOwner}/${repoName} template=${templateType} port=${containerPort}`);
     console.log(`[${new Date().toISOString()}] ⚠️ IMPORTANT: Files will use PORT=${containerPort} (this must match CapRover Container HTTP Port)`);
 
-    // Default files to create
-    const defaultFiles = {
+    const websiteFiles = {
       'server.js': `const express = require('express');
 const path = require('path');
 
@@ -459,6 +458,165 @@ code {
 *.log
 `
     };
+
+    const discordBotFiles = {
+      'server.js': `const express = require('express');
+const { Client, GatewayIntentBits } = require('discord.js');
+
+const app = express();
+const PORT = process.env.PORT || ${containerPort};
+
+// Discord env vars (set these in CapRover → App Configs → Environment Variables)
+const DISCORD_APPLICATION_ID = process.env.DISCORD_APPLICATION_ID || '';
+const DISCORD_PUBLIC_KEY = process.env.DISCORD_PUBLIC_KEY || '';
+const DISCORD_GUILD_ID = process.env.DISCORD_GUILD_ID || '';
+const DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN || '';
+const DISCORD_PREFIX = process.env.DISCORD_PREFIX || '!';
+
+// Health check endpoint (CapRover-friendly)
+app.get('/api/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    discord: {
+      hasToken: !!DISCORD_BOT_TOKEN,
+      hasApplicationId: !!DISCORD_APPLICATION_ID,
+      hasPublicKey: !!DISCORD_PUBLIC_KEY,
+      hasGuildId: !!DISCORD_GUILD_ID,
+    },
+  });
+});
+
+// Simple landing page
+app.get('/', (req, res) => {
+  res.type('text/plain').send('Discord bot is running. Check /api/health');
+});
+
+// Discord client (prefix command example: "!ping")
+const client = new Client({
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent,
+  ],
+});
+
+client.once('ready', () => {
+  console.log('✅ Discord client ready:', client.user?.tag || '(unknown user)');
+});
+
+client.on('messageCreate', async (message) => {
+  try {
+    if (!message || !message.content) return;
+    if (message.author?.bot) return;
+    const content = message.content.trim();
+    if (content === \`\${DISCORD_PREFIX}ping\`) {
+      await message.reply('pong');
+    }
+  } catch (err) {
+    console.error('messageCreate handler error:', err);
+  }
+});
+
+async function start() {
+  // Start HTTP server
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(\`HTTP server listening on 0.0.0.0:\${PORT}\`);
+  });
+
+  // Start Discord bot (keep process running even if token is missing)
+  if (!DISCORD_BOT_TOKEN) {
+    console.error('❌ Missing DISCORD_BOT_TOKEN. Set it in CapRover env vars, then redeploy.');
+    return;
+  }
+
+  await client.login(DISCORD_BOT_TOKEN);
+}
+
+start().catch((err) => {
+  console.error('Fatal startup error:', err);
+  process.exitCode = 1;
+});
+`,
+      'package.json': `{
+  "name": "${repoName}",
+  "version": "1.0.0",
+  "description": "Auto-generated Discord bot",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "discord.js": "latest",
+    "express": "^4.18.2"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
+`,
+      'Dockerfile': `FROM node:18-alpine
+
+WORKDIR /usr/src/app
+
+# Copy package files
+COPY package*.json ./
+
+# Install dependencies
+RUN npm install --omit=dev && npm cache clean --force
+
+# Copy application files
+COPY . .
+
+# Create non-root user for security
+RUN addgroup -g 1001 -S nodejs && \\
+    adduser -S nodejs -u 1001 && \\
+    chown -R nodejs:nodejs /usr/src/app
+
+USER nodejs
+
+# Expose port
+EXPOSE ${containerPort}
+
+# Start the application
+CMD ["npm", "start"]
+`,
+      'captain-definition': `{
+  "schemaVersion": 2,
+  "dockerfilePath": "./Dockerfile"
+}
+`,
+      'README.md': `# ${repoName}
+
+Auto-generated Discord bot (CapRover + GitHub).
+
+## Required environment variables (CapRover)
+
+- \`DISCORD_BOT_TOKEN\` (required)
+- \`DISCORD_APPLICATION_ID\` (recommended)
+- \`DISCORD_PUBLIC_KEY\` (recommended)
+- \`DISCORD_GUILD_ID\` (optional)
+- \`DISCORD_PREFIX\` (optional, default \`!\`)
+- \`PORT\` (required by CapRover; set automatically)
+
+## Local run
+
+\`\`\`bash
+npm install
+npm start
+\`\`\`
+
+Health check: \`/api/health\`
+`,
+      '.gitignore': `node_modules/
+.env
+.DS_Store
+*.log
+`
+    };
+
+    // Default files to create
+    const defaultFiles = templateType === 'discord-bot' ? discordBotFiles : websiteFiles;
 
     // Push each file to GitHub
     for (const [filePath, content] of Object.entries(defaultFiles)) {
@@ -1140,6 +1298,168 @@ app.post('/api/create-website', requireAuth, async (req, res) => {
     res.status(500).json({
       success: false,
       error: error.message || 'Failed to create website'
+    });
+  }
+});
+
+// Main endpoint to create a Discord bot (GitHub + CapRover) (protected)
+app.post('/api/create-discord-bot', requireAuth, async (req, res) => {
+  const requestId = Date.now();
+  console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] POST /api/create-discord-bot`);
+
+  try {
+    const { projectName, branch = 'main' } = req.body;
+
+    if (!projectName) {
+      return res.status(400).json({ error: 'Project name is required' });
+    }
+
+    // Validate GitHub credentials
+    if (!GITHUB_TOKEN) {
+      return res.status(400).json({ error: 'GitHub credentials not configured. Please set GITHUB_TOKEN environment variable.' });
+    }
+
+    if (!GITHUB_USERNAME) {
+      return res.status(400).json({ error: 'GitHub username not configured. Please set GITHUB_USERNAME environment variable.' });
+    }
+
+    if (!CAPROVER_URL || !CAPROVER_PASSWORD) {
+      return res.status(400).json({ error: 'CapRover credentials not configured. Please set CAPROVER_URL and CAPROVER_PASSWORD environment variables.' });
+    }
+
+    // Step 1: Create GitHub repository
+    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 1: Creating GitHub repository: ${projectName}`);
+    const githubResult = await createGitHubRepo(projectName, true);
+    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 1: ✅ GitHub repo created: ${githubResult.repoUrl}`);
+
+    // Step 2: Authenticate with CapRover
+    const baseUrl = CAPROVER_URL.replace(/\/+$/, '');
+    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 2: Authenticating with CapRover at ${baseUrl}...`);
+    const token = await caproverLogin(baseUrl, CAPROVER_PASSWORD);
+    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 2: ✅ CapRover authentication successful`);
+
+    // Step 3: Determine port (use provided port or generate one)
+    let containerPort;
+    if (req.body.port) {
+      containerPort = parseInt(req.body.port, 10);
+      if (isNaN(containerPort) || containerPort < 3000 || containerPort > 65535) {
+        return res.status(400).json({ error: 'Invalid port. Port must be between 3000 and 65535.' });
+      }
+      console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 3: Using provided container port: ${containerPort}`);
+    } else {
+      console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 3: Generating available port...`);
+      const apps = await caproverListApps(baseUrl, token);
+      const usedPorts = new Set(apps.map(app => app.containerHttpPort).filter(p => p && p > 0));
+      containerPort = findNextAvailablePort(usedPorts, 3000);
+      console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 3: Generated available port: ${containerPort}`);
+    }
+
+    // Step 3b: Push Discord bot starter files to GitHub (with correct port)
+    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 3b: Pushing Discord bot starter files to GitHub with port ${containerPort}...`);
+    try {
+      await pushDefaultFilesToGitHub(GITHUB_USERNAME, projectName, branch, containerPort, 'discord-bot');
+      console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 3b: ✅ Discord bot files pushed/updated to GitHub`);
+    } catch (error) {
+      console.warn(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 3b: ⚠️ Could not push default files: ${error.message}. Continuing anyway...`);
+    }
+
+    // Step 4: Ensure app exists (idempotent)
+    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 4: Ensuring CapRover app exists: ${projectName}`);
+    await caproverEnsureApp(baseUrl, token, projectName);
+
+    // Step 5: Set Container HTTP Port
+    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 5: Setting container HTTP port to ${containerPort}...`);
+    await caproverSetContainerHttpPort(baseUrl, token, projectName, containerPort);
+
+    // Step 6: Set minimal env vars (PORT only; Discord vars are set in a later step)
+    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 6: Setting minimal environment variables...`);
+    await caproverSetEnvVars(baseUrl, token, projectName, { PORT: String(containerPort) });
+
+    // Step 7: Configure GitHub deployment
+    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Step 7: Configuring GitHub deployment...`);
+    await caproverSetGitHubDeployment(baseUrl, token, projectName, githubResult.cloneUrl, branch, GITHUB_TOKEN, GITHUB_USERNAME, containerPort);
+
+    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] ✅ Discord bot created successfully!`);
+    res.json({
+      success: true,
+      message: 'Discord bot created successfully!',
+      data: {
+        githubRepo: githubResult.repoUrl,
+        caproverApp: projectName,
+        port: containerPort,
+        branch: branch,
+      }
+    });
+  } catch (error) {
+    console.error(`[${new Date().toISOString()}] [REQUEST ${requestId}] ❌ Error creating Discord bot:`, error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to create Discord bot'
+    });
+  }
+});
+
+// Save Discord bot config into CapRover env vars (protected)
+app.post('/api/apps/:appName/discord-bot-config', requireAuth, async (req, res) => {
+  const requestId = Date.now();
+  const { appName } = req.params;
+  console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] POST /api/apps/${appName}/discord-bot-config`);
+
+  try {
+    if (!CAPROVER_URL || !CAPROVER_PASSWORD) {
+      return res.status(400).json({ success: false, error: 'CapRover credentials not configured' });
+    }
+
+    const {
+      applicationId,
+      publicKey,
+      botToken,
+      guildId,
+    } = req.body || {};
+
+    if (!applicationId || !publicKey || !botToken) {
+      return res.status(400).json({
+        success: false,
+        error: 'applicationId, publicKey, and botToken are required'
+      });
+    }
+
+    const baseUrl = CAPROVER_URL.replace(/\/+$/, '');
+    const token = await caproverLogin(baseUrl, CAPROVER_PASSWORD);
+
+    // Fetch existing env vars so we don't wipe unrelated values
+    const existingEnvCheck = await caproverGetEnvVars(baseUrl, token, appName);
+    let existingEnvObj = {};
+
+    if (existingEnvCheck.ok) {
+      const envVarsData = existingEnvCheck.result?.data?.envVars || existingEnvCheck.result?.envVars || [];
+      envVarsData.forEach(env => {
+        const key = env.key || env.name;
+        const value = env.value;
+        if (key && value !== undefined) existingEnvObj[key] = String(value);
+      });
+    }
+
+    const merged = {
+      ...existingEnvObj,
+      DISCORD_APPLICATION_ID: String(applicationId).trim(),
+      DISCORD_PUBLIC_KEY: String(publicKey).trim(),
+      DISCORD_BOT_TOKEN: String(botToken).trim(),
+    };
+
+    const guildIdTrimmed = String(guildId || '').trim();
+    if (guildIdTrimmed) {
+      merged.DISCORD_GUILD_ID = guildIdTrimmed;
+    }
+
+    await caproverSetEnvVars(baseUrl, token, appName, merged);
+
+    res.json({ success: true, message: 'Discord bot env vars saved successfully' });
+  } catch (error) {
+    console.error(`[${new Date().toISOString()}] [REQUEST ${requestId}] ❌ Error saving Discord bot config:`, error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to save Discord bot config'
     });
   }
 });

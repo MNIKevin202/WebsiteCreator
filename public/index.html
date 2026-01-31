@@ -67,6 +67,9 @@
                     <button onclick="showPage('create')" id="nav-create" class="nav-btn active">
                         Create Website
                     </button>
+                    <button onclick="showPage('discord')" id="nav-discord" class="nav-btn">
+                        Create Discord Bot
+                    </button>
                     <button onclick="showPage('manage')" id="nav-manage" class="nav-btn">
                         Manage
                     </button>
@@ -115,7 +118,7 @@
                                     min="3000"
                                     max="65535"
                                 >
-                                <button type="button" onclick="generatePort()" class="btn-secondary btn-generate-port">
+                                <button type="button" onclick="generatePort('port', this)" class="btn-secondary btn-generate-port">
                                     <span>🎲</span>
                                     <span>Generate</span>
                                 </button>
@@ -164,6 +167,77 @@
                         <h2>❌ Error</h2>
                         <div id="errorContent"></div>
                         <button onclick="resetForm()" class="btn-secondary">Try Again</button>
+                    </div>
+                </div>
+
+                <!-- Create Discord Bot Page -->
+                <div id="page-discord" class="page-content" style="display: none;">
+                    <form id="createDiscordBotForm" class="form-card">
+                        <div class="form-group">
+                            <label for="discordProjectName">Project Name *</label>
+                            <input 
+                                type="text" 
+                                id="discordProjectName" 
+                                name="discordProjectName" 
+                                required 
+                                placeholder="my-discord-bot"
+                                pattern="[a-z0-9\-]+"
+                                title="Only lowercase letters, numbers, and hyphens allowed"
+                            >
+                            <small>This will be used for both GitHub repo and CapRover app name</small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="discordBranch">Git Branch</label>
+                            <input 
+                                type="text" 
+                                id="discordBranch" 
+                                name="discordBranch" 
+                                value="main"
+                                placeholder="main"
+                            >
+                            <small>Default branch for deployment</small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="discordPort">Container Port:</label>
+                            <div class="port-input-group">
+                                <input 
+                                    type="number" 
+                                    id="discordPort" 
+                                    name="discordPort" 
+                                    placeholder="Auto-generate"
+                                    min="3000"
+                                    max="65535"
+                                >
+                                <button type="button" onclick="generatePort('discordPort', this)" class="btn-secondary btn-generate-port">
+                                    <span>🎲</span>
+                                    <span>Generate</span>
+                                </button>
+                            </div>
+                            <small>Used for the bot’s health endpoint in CapRover (leave empty to auto-generate)</small>
+                        </div>
+
+                        <small style="display: block; margin-top: 16px; color: var(--text-secondary);">
+                            ℹ️ After creation, you’ll paste your Discord Application ID / Public Key / Bot Token and we’ll save them to CapRover environment variables.
+                        </small>
+
+                        <button type="submit" id="discordSubmitBtn" class="btn-primary">
+                            <span class="btn-text">Create Discord Bot</span>
+                            <span class="btn-loader" style="display: none;">⏳ Creating...</span>
+                        </button>
+                    </form>
+
+                    <div id="discordResult" class="result-card" style="display: none;">
+                        <h2>✅ Success!</h2>
+                        <div id="discordResultContent"></div>
+                        <button onclick="resetDiscordBotForm()" class="btn-secondary">Create Another</button>
+                    </div>
+
+                    <div id="discordError" class="error-card" style="display: none;">
+                        <h2>❌ Error</h2>
+                        <div id="discordErrorContent"></div>
+                        <button onclick="resetDiscordBotForm()" class="btn-secondary">Try Again</button>
                     </div>
                 </div>
 
