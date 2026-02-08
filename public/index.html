@@ -76,6 +76,9 @@
                     <button onclick="showPage('wizard')" id="nav-wizard" class="nav-btn">
                         Wizard
                     </button>
+                    <button onclick="showPage('info')" id="nav-info" class="nav-btn">
+                        Info
+                    </button>
                 </nav>
 
                 <!-- Create Website Page -->
@@ -301,6 +304,63 @@
                                 Start Over
                             </button>
                         </div>
+                    </div>
+                </div>
+
+                <!-- Info Page (Manual Setup Instructions) -->
+                <div id="page-info" class="page-content" style="display: none;">
+                    <h2>Manual Setup Instructions</h2>
+                    <p style="color: var(--text-secondary); margin-bottom: 24px;">
+                        Use this guide when creating websites manually (without the Create Website form). These are the same steps the automated flow performs.
+                    </p>
+
+                    <div class="form-card" style="max-width: 100%;">
+                        <h3 style="color: var(--primary-color); margin-bottom: 16px;">1. GitHub Repository</h3>
+                        <ul style="color: var(--text-secondary); margin: 0 0 24px 0; padding-left: 20px; line-height: 1.8;">
+                            <li>Create a new repository on GitHub with your project name (lowercase for CapRover app name).</li>
+                            <li>Use a branch name (usually <code>main</code>).</li>
+                            <li>Add your code including: <code>server.js</code>, <code>package.json</code>, <code>Dockerfile</code>, <code>captain-definition</code>.</li>
+                            <li>Ensure your app listens on <code>process.env.PORT</code> and binds to <code>0.0.0.0</code>.</li>
+                        </ul>
+
+                        <h3 style="color: var(--primary-color); margin-bottom: 16px;">2. CapRover App</h3>
+                        <ul style="color: var(--text-secondary); margin: 0 0 24px 0; padding-left: 20px; line-height: 1.8;">
+                            <li>Open <a href="https://captain.kpanel.xyz" target="_blank" style="color: var(--primary-color);">CapRover Dashboard</a>.</li>
+                            <li>Create a new app (App Configs → One-Click Apps / Deploy). Use the app name in <strong>lowercase</strong>.</li>
+                            <li>Set <strong>Container HTTP Port</strong> (e.g. 3000, or pick an unused port 3000–65535).</li>
+                        </ul>
+
+                        <h3 style="color: var(--primary-color); margin-bottom: 16px;">3. GitHub Deployment (CapRover)</h3>
+                        <ul style="color: var(--text-secondary); margin: 0 0 24px 0; padding-left: 20px; line-height: 1.8;">
+                            <li>In CapRover → App Configs → <strong>Deployment</strong>, configure GitHub deployment.</li>
+                            <li>Set: Repository URL, Branch, GitHub username, and token (or password).</li>
+                            <li>Make sure <strong>Container HTTP Port</strong> matches the port your app uses.</li>
+                        </ul>
+
+                        <h3 style="color: var(--primary-color); margin-bottom: 16px;">4. Webhook (Auto-Deploy on Push)</h3>
+                        <ul style="color: var(--text-secondary); margin: 0 0 24px 0; padding-left: 20px; line-height: 1.8;">
+                            <li>In your GitHub repo, go to <strong>Settings → Webhooks</strong>.</li>
+                            <li>Add webhook: <code>https://[your-caprover-url]/api/v2/user/apps/appData/[app-name]</code> (or use CapRover’s “Deploy” tab instructions).</li>
+                            <li>Or: <a href="https://github.com/settings/hooks/new" target="_blank" style="color: var(--primary-color);">Create a new webhook</a> and paste the URL CapRover provides.</li>
+                        </ul>
+
+                        <h3 style="color: var(--primary-color); margin-bottom: 16px;">5. Environment Variables</h3>
+                        <ul style="color: var(--text-secondary); margin: 0 0 24px 0; padding-left: 20px; line-height: 1.8;">
+                            <li>CapRover → App Configs → <strong>App Configs</strong> → Environment Variables.</li>
+                            <li>Add <code>PORT</code> = your Container HTTP Port.</li>
+                            <li>Add any other variables your app needs (e.g. <code>GITHUB_TOKEN</code>, <code>MONGO_URI</code>).</li>
+                        </ul>
+
+                        <h3 style="color: var(--primary-color); margin-bottom: 16px;">6. Custom Domain (Optional)</h3>
+                        <p style="color: var(--text-secondary); margin-bottom: 12px;">Add an A record for your domain:</p>
+                        <div style="background: var(--bg-color); padding: 16px; border-radius: 12px; border: 1px solid var(--border-color); margin-bottom: 16px; font-family: monospace; font-size: 0.9rem;">
+                            <div><strong>Type:</strong> A</div>
+                            <div><strong>Name:</strong> @ (or your subdomain)</div>
+                            <div><strong>Points to:</strong> 46.202.178.170</div>
+                            <div><strong>TTL:</strong> 60</div>
+                        </div>
+                        <p style="color: var(--text-secondary); margin-bottom: 8px;">Then in CapRover → App Configs → <strong>Custom Domain</strong>, add your domain and <code>www.yourdomain.com</code>.</p>
+                        <p style="color: var(--text-secondary); margin-bottom: 12px;">For Hostinger: <a href="https://hpanel.hostinger.com" target="_blank" style="color: var(--primary-color);">Open Hostinger DNS</a> and add the A record above.</p>
                     </div>
                 </div>
             </div>
