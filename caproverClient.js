@@ -429,25 +429,95 @@ async function caproverGetAppData(baseUrl, token, appName) {
 // Get image count for an app
 async function caproverGetImageCount(baseUrl, token, appName) {
   try {
+    // Try to get versions from appData first
     const appData = await caproverGetAppData(baseUrl, token, appName);
     
-    // Use the same logic as caproverDeleteOldImages to extract versions
+    // Debug: log what we got from appData
+    console.log(`[CAPROVER] appData keys for ${appName}:`, Object.keys(appData || {}));
+    
     let versions = [];
     
     if (appData.versions && Array.isArray(appData.versions)) {
       versions = appData.versions;
+      console.log(`[CAPROVER] Found ${versions.length} versions in appData.versions`);
     } else if (appData.images && Array.isArray(appData.images)) {
       versions = appData.images;
+      console.log(`[CAPROVER] Found ${versions.length} images in appData.images`);
     } else if (appData.deployedVersion) {
-      // Single version format
       versions = [appData.deployedVersion];
+      console.log(`[CAPROVER] Found deployedVersion in appData`);
     }
     
-    // If we still don't have versions, try to get them from Docker images
-    // CapRover stores images as Docker image tags, typically prefixed with captain-<appName>-
-    // For now, return the count from appData. If it's 0, we might need to query Docker API separately
+    // If we found versions in appData, return count
+    if (versions.length > 0) {
+      return versions.length;
+    }
     
-    return versions.length;
+    // Try querying Docker images via CapRover's Docker API proxy
+    // CapRover stores images with pattern: captain-<appName>-<timestamp>
+    try {
+      // Try CapRover's Docker images endpoint (if available)
+      const dockerResponse = await caproverRequest({
+        baseUrl,
+        token,
+        path: '/api/v2/user/system/docker/images',
+        method: 'GET',
+        allow404: true,
+      });
+      
+      if (dockerResponse && dockerResponse.data && Array.isArray(dockerResponse.data)) {
+        // Filter images that belong to this app
+        // CapRover images are typically tagged as: captain-<appName>-<timestamp>
+        const appImages = dockerResponse.data.filter(img => {
+          if (!img.RepoTags || !Array.isArray(img.RepoTags)) return false;
+          return img.RepoTags.some(tag => 
+            tag.includes(`captain-${appName}-`) || 
+            tag.includes(`captain-${appName}:`) ||
+            tag === `captain-${appName}`
+          );
+        });
+        console.log(`[CAPROVER] Found ${appImages.length} Docker images for ${appName}`);
+        return appImages.length;
+      }
+    } catch (dockerError) {
+      // Docker API might not be available, that's okay
+      console.log(`[CAPROVER] Docker API not available for image count: ${dockerError.message}`);
+    }
+    
+    // Try alternative: query app definition which might have image info
+    try {
+      const appDefResponse = await caproverRequest({
+        baseUrl,
+        token,
+        path: `/api/v2/user/apps/appDefinitions/${appName}`,
+        method: 'GET',
+        allow404: true,
+      });
+      
+      if (appDefResponse && appDefResponse.data) {
+        const appDef = appDefResponse.data;
+        console.log(`[CAPROVER] appDefinition keys for ${appName}:`, Object.keys(appDef || {}));
+        
+        // Check if app definition has image/version info
+        if (appDef.versions && Array.isArray(appDef.versions)) {
+          console.log(`[CAPROVER] Found ${appDef.versions.length} versions in appDefinition`);
+          return appDef.versions.length;
+        }
+        if (appDef.imageName) {
+          // If there's an imageName, assume at least 1 image exists
+          console.log(`[CAPROVER] Found imageName in appDefinition, assuming 1 image`);
+          return 1;
+        }
+      }
+    } catch (appDefError) {
+      // App definition endpoint might not exist or have version info
+      console.log(`[CAPROVER] App definition endpoint not available: ${appDefError.message}`);
+    }
+    
+    // If app exists and is deployed, assume at least 1 image exists
+    // This is a fallback - if the app is running, it must have at least one image
+    console.log(`[CAPROVER] Could not determine image count for ${appName}, returning 0`);
+    return 0;
   } catch (error) {
     console.warn(`[CAPROVER] Could not get image count for ${appName}:`, error.message);
     return 0; // Return 0 if we can't determine

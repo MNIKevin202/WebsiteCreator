@@ -1699,6 +1699,8 @@ app.get('/api/apps', requireAuth, async (req, res) => {
 // Get image count for a specific app (protected)
 app.get('/api/apps/:appName/images/count', requireAuth, async (req, res) => {
   const { appName } = req.params;
+  const requestId = Date.now();
+  console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] GET /api/apps/${appName}/images/count`);
   
   try {
     if (!CAPROVER_URL || !CAPROVER_PASSWORD) {
@@ -1712,9 +1714,10 @@ app.get('/api/apps/:appName/images/count', requireAuth, async (req, res) => {
     const token = await caproverLogin(baseUrl, CAPROVER_PASSWORD);
     const imageCount = await caproverGetImageCount(baseUrl, token, appName);
     
+    console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] Image count for ${appName}: ${imageCount}`);
     res.json({ success: true, appName, imageCount });
   } catch (error) {
-    console.error(`[${new Date().toISOString()}] Error getting image count:`, error);
+    console.error(`[${new Date().toISOString()}] [REQUEST ${requestId}] Error getting image count:`, error);
     res.status(500).json({ 
       success: false, 
       error: error.message || 'Failed to get image count' 

@@ -2547,12 +2547,14 @@ async function loadImages() {
                     });
                     if (countResponse.ok) {
                         const countData = await countResponse.json();
-                        return { ...app, imageCount: countData.imageCount || 0 };
+                        // Use null to indicate "unknown" vs 0 which means "no images"
+                        const count = countData.imageCount !== undefined ? countData.imageCount : null;
+                        return { ...app, imageCount: count };
                     }
-                    return { ...app, imageCount: 0 };
+                    return { ...app, imageCount: null }; // null = unknown
                 } catch (error) {
                     console.warn(`Failed to get image count for ${app.appName}:`, error);
-                    return { ...app, imageCount: 0 };
+                    return { ...app, imageCount: null }; // null = unknown
                 }
             })
         );
@@ -2564,7 +2566,7 @@ async function loadImages() {
                     <div style="flex: 1;">
                         <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 4px;">${escapeHtml(app.appName)}</div>
                         <div style="font-size: 0.85rem; color: var(--text-secondary);">
-                            Port: ${app.containerHttpPort || 'N/A'} | Instances: ${app.instanceCount || 1} | Images: <span id="image-count-${escapeHtml(app.appName)}">${app.imageCount || 0}</span>
+                            Port: ${app.containerHttpPort || 'N/A'} | Instances: ${app.instanceCount || 1} | Images: <span id="image-count-${escapeHtml(app.appName)}">${app.imageCount !== null && app.imageCount !== undefined ? app.imageCount : '?'}</span>
                         </div>
                     </div>
                     <div style="display: flex; gap: 8px; align-items: center;">
@@ -2599,11 +2601,16 @@ async function updateImageCount(appName) {
             const countData = await countResponse.json();
             const countElement = document.getElementById(`image-count-${appName}`);
             if (countElement) {
-                countElement.textContent = countData.imageCount || 0;
+                const count = countData.imageCount !== undefined ? countData.imageCount : null;
+                countElement.textContent = count !== null ? count : '?';
             }
         }
     } catch (error) {
         console.warn(`Failed to update image count for ${appName}:`, error);
+        const countElement = document.getElementById(`image-count-${appName}`);
+        if (countElement) {
+            countElement.textContent = '?';
+        }
     }
 }
 
