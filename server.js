@@ -15,6 +15,8 @@ const {
   caproverSetCustomDomains,
   caproverListApps,
   caproverDeleteApp,
+  caproverGetAppData,
+  caproverDeleteOldImages,
 } = require('./caproverClient');
 
 // Load .env file only in local development (not in CapRover)
@@ -1539,6 +1541,38 @@ app.post('/api/apps/:appName/discord-bot-config', requireAuth, async (req, res) 
     res.status(500).json({
       success: false,
       error: error.message || 'Failed to save Discord bot config'
+    });
+  }
+});
+
+// Delete old images for an app (keeps 5 most recent) (protected)
+app.delete('/api/apps/:appName/images/old', requireAuth, async (req, res) => {
+  const requestId = Date.now();
+  const { appName } = req.params;
+  console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] DELETE /api/apps/${appName}/images/old`);
+
+  try {
+    if (!CAPROVER_URL || !CAPROVER_PASSWORD) {
+      return res.status(400).json({ success: false, error: 'CapRover credentials not configured' });
+    }
+
+    const baseUrl = CAPROVER_URL.replace(/\/+$/, '');
+    const token = await caproverLogin(baseUrl, CAPROVER_PASSWORD);
+
+    const result = await caproverDeleteOldImages(baseUrl, token, appName, 5);
+
+    res.json({
+      success: true,
+      message: `Deleted ${result.deleted} old image(s), kept ${result.kept} most recent`,
+      deleted: result.deleted,
+      kept: result.kept,
+      total: result.total
+    });
+  } catch (error) {
+    console.error(`[${new Date().toISOString()}] [REQUEST ${requestId}] ❌ Error deleting old images:`, error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to delete old images'
     });
   }
 });

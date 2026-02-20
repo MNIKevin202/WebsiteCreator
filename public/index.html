@@ -79,6 +79,9 @@
                     <button onclick="showPage('info')" id="nav-info" class="nav-btn">
                         Info
                     </button>
+                    <button onclick="showPage('images')" id="nav-images" class="nav-btn">
+                        Image Management
+                    </button>
                 </nav>
 
                 <!-- Create Website Page -->
@@ -361,6 +364,23 @@
                         </div>
                         <p style="color: var(--text-secondary); margin-bottom: 8px;">Then in CapRover → App Configs → <strong>Custom Domain</strong>, add your domain and <code>www.yourdomain.com</code>.</p>
                         <p style="color: var(--text-secondary); margin-bottom: 12px;">For Hostinger: <a href="https://hpanel.hostinger.com" target="_blank" style="color: var(--primary-color);">Open Hostinger DNS</a> and add the A record above.</p>
+                    </div>
+                </div>
+
+                <!-- Image Management Page -->
+                <div id="page-images" class="page-content" style="display: none;">
+                    <h2>Image Management</h2>
+                    <p style="color: var(--text-secondary); margin-bottom: 24px;">
+                        Manage Docker images for your CapRover apps. Delete old images to free up disk space (keeps the 5 most recent).
+                    </p>
+                    <div id="imagesLoading" class="form-card" style="text-align: center; padding: 40px;">
+                        <p>Loading apps...</p>
+                    </div>
+                    <div id="imagesList" class="form-card" style="display: none;">
+                        <div id="imagesContent"></div>
+                    </div>
+                    <div id="imagesError" class="error-card" style="display: none;">
+                        <div id="imagesErrorContent"></div>
                     </div>
                 </div>
             </div>

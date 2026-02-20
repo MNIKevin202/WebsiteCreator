@@ -414,6 +414,116 @@ async function caproverSetGitHubDeployment(baseUrl, token, appName, repoUrl, bra
   return result;
 }
 
+// Get app data including versions/images
+async function caproverGetAppData(baseUrl, token, appName) {
+  const result = await caproverRequest({
+    baseUrl,
+    token,
+    path: `/api/v2/user/apps/appData/${appName}`,
+    method: 'GET',
+  });
+  
+  return result?.data || result || {};
+}
+
+// Delete old images/versions (keeps the N most recent)
+async function caproverDeleteOldImages(baseUrl, token, appName, keepCount = 5) {
+  try {
+    // Get app data to find versions/images
+    const appData = await caproverGetAppData(baseUrl, token, appName);
+    
+    // CapRover stores versions in different places depending on version
+    // Try common patterns: versions, images, deployedVersion, etc.
+    let versions = [];
+    
+    if (appData.versions && Array.isArray(appData.versions)) {
+      versions = appData.versions;
+    } else if (appData.images && Array.isArray(appData.images)) {
+      versions = appData.images;
+    } else if (appData.deployedVersion) {
+      // Single version format
+      versions = [appData.deployedVersion];
+    }
+    
+    // Sort by timestamp if available, or keep as-is
+    if (versions.length > 0 && versions[0].timeStamp) {
+      versions.sort((a, b) => {
+        const timeA = a.timeStamp || 0;
+        const timeB = b.timeStamp || 0;
+        return timeB - timeA; // Most recent first
+      });
+    }
+    
+    // Keep the N most recent
+    const toKeep = versions.slice(0, keepCount);
+    const toDelete = versions.slice(keepCount);
+    
+    if (toDelete.length === 0) {
+      return { deleted: 0, kept: toKeep.length, message: 'No old images to delete' };
+    }
+    
+    // Delete old versions
+    // CapRover API: DELETE /api/v2/user/apps/appData/[appName] with version/image identifier
+    let deletedCount = 0;
+    const errors = [];
+    
+    for (const version of toDelete) {
+      try {
+        // Try different identifier fields
+        const identifier = version.version || version.imageName || version.tag || version.id || version;
+        
+        if (!identifier) {
+          console.warn('[CAPROVER] Skipping version with no identifier:', version);
+          continue;
+        }
+        
+        // Try DELETE endpoint - format may vary
+        try {
+          await caproverRequest({
+            baseUrl,
+            token,
+            path: `/api/v2/user/apps/appData/${appName}`,
+            method: 'DELETE',
+            body: { version: String(identifier) },
+            allow404: true,
+          });
+          deletedCount++;
+        } catch (deleteError) {
+          // Try alternative endpoint format
+          try {
+            await caproverRequest({
+              baseUrl,
+              token,
+              path: `/api/v2/user/apps/appData/${appName}/${encodeURIComponent(String(identifier))}`,
+              method: 'DELETE',
+              allow404: true,
+            });
+            deletedCount++;
+          } catch (altError) {
+            errors.push(`Failed to delete version ${identifier}: ${altError.message}`);
+          }
+        }
+      } catch (err) {
+        errors.push(`Error processing version: ${err.message}`);
+      }
+    }
+    
+    if (errors.length > 0 && deletedCount === 0) {
+      throw new Error(`Failed to delete images: ${errors.join('; ')}`);
+    }
+    
+    return {
+      deleted: deletedCount,
+      kept: toKeep.length,
+      total: versions.length,
+      errors: errors.length > 0 ? errors : undefined
+    };
+  } catch (error) {
+    console.error('[CAPROVER] Error deleting old images:', error);
+    throw error;
+  }
+}
+
 module.exports = {
   caproverLogin,
   caproverEnsureApp,
@@ -424,4 +534,6 @@ module.exports = {
   caproverSetCustomDomains,
   caproverListApps,
   caproverDeleteApp,
+  caproverGetAppData,
+  caproverDeleteOldImages,
 };

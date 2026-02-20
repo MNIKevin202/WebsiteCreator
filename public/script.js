@@ -58,6 +58,8 @@ function showPage(pageName) {
         initWizard();
     } else if (pageName === 'discord') {
         // Nothing to pre-load right now (kept for symmetry / future)
+    } else if (pageName === 'images') {
+        loadImages();
     }
 }
 
@@ -2494,4 +2496,108 @@ function copyWizardMessage() {
 
 function resetWizard() {
     initWizard();
+}
+
+// =========================
+// Image Management
+// =========================
+async function loadImages() {
+    const imagesLoading = document.getElementById('imagesLoading');
+    const imagesList = document.getElementById('imagesList');
+    const imagesError = document.getElementById('imagesError');
+    const imagesErrorContent = document.getElementById('imagesErrorContent');
+    const imagesContent = document.getElementById('imagesContent');
+
+    imagesLoading.style.display = 'block';
+    imagesList.style.display = 'none';
+    imagesError.style.display = 'none';
+
+    try {
+        const response = await fetch('/api/apps', {
+            credentials: 'include'
+        });
+
+        if (response.status === 401) {
+            showLogin();
+            return;
+        }
+
+        const data = await response.json();
+
+        if (!data.success) {
+            throw new Error(data.error || 'Failed to load apps');
+        }
+
+        const apps = data.apps || [];
+
+        if (apps.length === 0) {
+            imagesContent.innerHTML = '<div class="empty-state"><p>No CapRover apps found.</p></div>';
+            imagesLoading.style.display = 'none';
+            imagesList.style.display = 'block';
+            return;
+        }
+
+        let html = '<div style="display: grid; gap: 16px;">';
+        apps.forEach(app => {
+            html += `
+                <div class="manage-item-single" style="display: flex; justify-content: space-between; align-items: center; padding: 16px; background: var(--bg-color); border-radius: 12px; border: 1px solid var(--border-color);">
+                    <div style="flex: 1;">
+                        <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 4px;">${escapeHtml(app.appName)}</div>
+                        <div style="font-size: 0.85rem; color: var(--text-secondary);">
+                            Port: ${app.containerHttpPort || 'N/A'} | Instances: ${app.instanceCount || 1}
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <a href="https://captain.kpanel.xyz/#/apps/details/${escapeHtml(app.appName)}" target="_blank" class="manage-app-link" title="Open in CapRover">
+                            🔗 CapRover
+                        </a>
+                        <button onclick="deleteOldImages('${escapeHtml(app.appName)}')" class="btn-danger" style="width: auto; padding: 8px 16px; font-size: 0.9rem;">
+                            Delete Old Images
+                        </button>
+                    </div>
+                </div>
+            `;
+        });
+        html += '</div>';
+
+        imagesContent.innerHTML = html;
+        imagesLoading.style.display = 'none';
+        imagesList.style.display = 'block';
+    } catch (error) {
+        imagesLoading.style.display = 'none';
+        imagesErrorContent.textContent = error.message || 'Failed to load apps';
+        imagesError.style.display = 'block';
+    }
+}
+
+function deleteOldImages(appName) {
+    showConfirmModal(
+        'Delete Old Images',
+        `This will delete all Docker images for "${appName}" except the 5 most recent. This action cannot be undone. Continue?`,
+        async () => {
+            try {
+                const response = await fetch(`/api/apps/${encodeURIComponent(appName)}/images/old`, {
+                    method: 'DELETE',
+                    credentials: 'include'
+                });
+
+                if (response.status === 401) {
+                    showLogin();
+                    throw new Error('Session expired. Please login again.');
+                }
+
+                const data = await response.json();
+
+                if (!data.success) {
+                    throw new Error(data.error || 'Failed to delete old images');
+                }
+
+                showToast(`Deleted old images for ${appName}. Kept ${data.kept || 5} most recent.`, 'success');
+            } catch (error) {
+                showErrorModal('Delete Failed', error.message || 'Failed to delete old images. Please try again.');
+            }
+        },
+        'Delete',
+        'danger'
+    );
 }
