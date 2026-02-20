@@ -426,6 +426,34 @@ async function caproverGetAppData(baseUrl, token, appName) {
   return result?.data || result || {};
 }
 
+// Get image count for an app
+async function caproverGetImageCount(baseUrl, token, appName) {
+  try {
+    const appData = await caproverGetAppData(baseUrl, token, appName);
+    
+    // Use the same logic as caproverDeleteOldImages to extract versions
+    let versions = [];
+    
+    if (appData.versions && Array.isArray(appData.versions)) {
+      versions = appData.versions;
+    } else if (appData.images && Array.isArray(appData.images)) {
+      versions = appData.images;
+    } else if (appData.deployedVersion) {
+      // Single version format
+      versions = [appData.deployedVersion];
+    }
+    
+    // If we still don't have versions, try to get them from Docker images
+    // CapRover stores images as Docker image tags, typically prefixed with captain-<appName>-
+    // For now, return the count from appData. If it's 0, we might need to query Docker API separately
+    
+    return versions.length;
+  } catch (error) {
+    console.warn(`[CAPROVER] Could not get image count for ${appName}:`, error.message);
+    return 0; // Return 0 if we can't determine
+  }
+}
+
 // Delete old images/versions (keeps the N most recent)
 async function caproverDeleteOldImages(baseUrl, token, appName, keepCount = 5) {
   try {
@@ -535,5 +563,6 @@ module.exports = {
   caproverListApps,
   caproverDeleteApp,
   caproverGetAppData,
+  caproverGetImageCount,
   caproverDeleteOldImages,
 };

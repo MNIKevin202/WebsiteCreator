@@ -2513,22 +2513,23 @@ async function loadImages() {
     imagesError.style.display = 'none';
 
     try {
-        const response = await fetch('/api/apps', {
+        // First get apps list
+        const appsResponse = await fetch('/api/apps', {
             credentials: 'include'
         });
 
-        if (response.status === 401) {
+        if (appsResponse.status === 401) {
             showLogin();
             return;
         }
 
-        const data = await response.json();
+        const appsData = await appsResponse.json();
 
-        if (!data.success) {
-            throw new Error(data.error || 'Failed to load apps');
+        if (!appsData.success) {
+            throw new Error(appsData.error || 'Failed to load apps');
         }
 
-        const apps = data.apps || [];
+        const apps = appsData.apps || [];
 
         if (apps.length === 0) {
             imagesContent.innerHTML = '<div class="empty-state"><p>No CapRover apps found.</p></div>';
@@ -2537,14 +2538,33 @@ async function loadImages() {
             return;
         }
 
+        // Fetch image counts for all apps in parallel
+        const appsWithCounts = await Promise.all(
+            apps.map(async (app) => {
+                try {
+                    const countResponse = await fetch(`/api/apps/${encodeURIComponent(app.appName)}/images/count`, {
+                        credentials: 'include'
+                    });
+                    if (countResponse.ok) {
+                        const countData = await countResponse.json();
+                        return { ...app, imageCount: countData.imageCount || 0 };
+                    }
+                    return { ...app, imageCount: 0 };
+                } catch (error) {
+                    console.warn(`Failed to get image count for ${app.appName}:`, error);
+                    return { ...app, imageCount: 0 };
+                }
+            })
+        );
+
         let html = '<div style="display: grid; gap: 16px;">';
-        apps.forEach(app => {
+        appsWithCounts.forEach(app => {
             html += `
-                <div class="manage-item-single" style="display: flex; justify-content: space-between; align-items: center; padding: 16px; background: var(--bg-color); border-radius: 12px; border: 1px solid var(--border-color);">
+                <div class="manage-item-single" style="display: flex; justify-content: space-between; align-items: center; padding: 16px; background: var(--bg-color); border-radius: 12px; border: 1px solid var(--border-color);" data-app-name="${escapeHtml(app.appName)}">
                     <div style="flex: 1;">
                         <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 4px;">${escapeHtml(app.appName)}</div>
                         <div style="font-size: 0.85rem; color: var(--text-secondary);">
-                            Port: ${app.containerHttpPort || 'N/A'} | Instances: ${app.instanceCount || 1}
+                            Port: ${app.containerHttpPort || 'N/A'} | Instances: ${app.instanceCount || 1} | Images: <span id="image-count-${escapeHtml(app.appName)}">${app.imageCount || 0}</span>
                         </div>
                     </div>
                     <div style="display: flex; gap: 8px; align-items: center;">
@@ -2570,6 +2590,23 @@ async function loadImages() {
     }
 }
 
+async function updateImageCount(appName) {
+    try {
+        const countResponse = await fetch(`/api/apps/${encodeURIComponent(appName)}/images/count`, {
+            credentials: 'include'
+        });
+        if (countResponse.ok) {
+            const countData = await countResponse.json();
+            const countElement = document.getElementById(`image-count-${appName}`);
+            if (countElement) {
+                countElement.textContent = countData.imageCount || 0;
+            }
+        }
+    } catch (error) {
+        console.warn(`Failed to update image count for ${appName}:`, error);
+    }
+}
+
 function deleteOldImages(appName) {
     showConfirmModal(
         'Delete Old Images',
@@ -2592,7 +2629,10 @@ function deleteOldImages(appName) {
                     throw new Error(data.error || 'Failed to delete old images');
                 }
 
-                showToast(`Deleted old images for ${appName}. Kept ${data.kept || 5} most recent.`, 'success');
+                showToast(`Deleted ${data.deleted || 0} old image(s) for ${appName}. Kept ${data.kept || 5} most recent.`, 'success');
+                
+                // Update the image count for this app
+                await updateImageCount(appName);
             } catch (error) {
                 showErrorModal('Delete Failed', error.message || 'Failed to delete old images. Please try again.');
             }

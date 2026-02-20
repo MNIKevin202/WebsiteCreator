@@ -16,6 +16,7 @@ const {
   caproverListApps,
   caproverDeleteApp,
   caproverGetAppData,
+  caproverGetImageCount,
   caproverDeleteOldImages,
 } = require('./caproverClient');
 
@@ -1666,12 +1667,57 @@ app.get('/api/apps', requireAuth, async (req, res) => {
     const token = await caproverLogin(baseUrl, CAPROVER_PASSWORD);
     const apps = await caproverListApps(baseUrl, token);
     
-    res.json({ success: true, apps });
+    // Optionally include image counts (can be slow for many apps, so make it optional)
+    const includeImageCounts = req.query.includeImageCounts === 'true';
+    
+    if (includeImageCounts) {
+      // Fetch image counts in parallel
+      const appsWithCounts = await Promise.all(
+        apps.map(async (app) => {
+          try {
+            const imageCount = await caproverGetImageCount(baseUrl, token, app.appName);
+            return { ...app, imageCount };
+          } catch (error) {
+            console.warn(`Failed to get image count for ${app.appName}:`, error.message);
+            return { ...app, imageCount: 0 };
+          }
+        })
+      );
+      res.json({ success: true, apps: appsWithCounts });
+    } else {
+      res.json({ success: true, apps });
+    }
   } catch (error) {
     console.error(`[${new Date().toISOString()}] Error listing apps:`, error);
     res.status(500).json({ 
       success: false, 
       error: error.message || 'Failed to list CapRover apps' 
+    });
+  }
+});
+
+// Get image count for a specific app (protected)
+app.get('/api/apps/:appName/images/count', requireAuth, async (req, res) => {
+  const { appName } = req.params;
+  
+  try {
+    if (!CAPROVER_URL || !CAPROVER_PASSWORD) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'CapRover credentials not configured' 
+      });
+    }
+    
+    const baseUrl = CAPROVER_URL.replace(/\/+$/, '');
+    const token = await caproverLogin(baseUrl, CAPROVER_PASSWORD);
+    const imageCount = await caproverGetImageCount(baseUrl, token, appName);
+    
+    res.json({ success: true, appName, imageCount });
+  } catch (error) {
+    console.error(`[${new Date().toISOString()}] Error getting image count:`, error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message || 'Failed to get image count' 
     });
   }
 });
