@@ -329,7 +329,16 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// Serve index.html for all routes (SPA support)
+// Serve specific pages
+app.get('/event-preview', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'event-preview.html'));
+});
+
+app.get('/obs-dock', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'obs-dock.html'));
+});
+
+// Serve index.html for all other routes (SPA support)
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
@@ -400,10 +409,163 @@ CMD ["npm", "start"]
             <h1>🚀 Welcome!</h1>
             <p>Your website is up and running.</p>
             <p>Start editing <code>public/index.html</code> to customize this page.</p>
+            
+            <!-- Reset Countdown Timer -->
+            <div id="resetCountdown" class="countdown-container">
+                <div class="countdown-label">Next Reset:</div>
+                <div id="countdownDisplay" class="countdown-display">00:00:00:00</div>
+            </div>
         </div>
     </div>
+    <script src="/countdown.js"></script>
 </body>
 </html>
+`,
+      'public/event-preview.html': `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Event Preview</title>
+    <link rel="stylesheet" href="/styles.css">
+    <style>
+        body {
+            background: #000;
+            color: #fff;
+            font-family: 'Arial', sans-serif;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+        .event-preview {
+            text-align: center;
+            padding: 40px;
+        }
+        .event-title {
+            font-size: 3rem;
+            margin-bottom: 30px;
+            text-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
+        }
+        .countdown-display {
+            font-size: 4rem;
+            font-weight: bold;
+            font-family: 'Courier New', monospace;
+            color: #00ff00;
+            text-shadow: 0 0 10px rgba(0, 255, 0, 0.8);
+            margin: 20px 0;
+        }
+        .countdown-label {
+            font-size: 1.5rem;
+            color: #aaa;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="event-preview">
+        <h1 class="event-title">Next Reset</h1>
+        <div class="countdown-label">Time Remaining:</div>
+        <div id="countdownDisplay" class="countdown-display">00:00:00:00</div>
+    </div>
+    <script src="/countdown.js"></script>
+</body>
+</html>
+`,
+      'public/obs-dock.html': `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OBS Dock - Reset Countdown</title>
+    <link rel="stylesheet" href="/styles.css">
+    <style>
+        body {
+            background: transparent;
+            color: #fff;
+            font-family: 'Arial', sans-serif;
+            margin: 0;
+            padding: 20px;
+            overflow: hidden;
+        }
+        .obs-dock {
+            text-align: center;
+        }
+        .countdown-label {
+            font-size: 1rem;
+            color: #aaa;
+            margin-bottom: 8px;
+        }
+        .countdown-display {
+            font-size: 2rem;
+            font-weight: bold;
+            font-family: 'Courier New', monospace;
+            color: #00ff00;
+            text-shadow: 0 0 5px rgba(0, 255, 0, 0.8);
+        }
+    </style>
+</head>
+<body>
+    <div class="obs-dock">
+        <div class="countdown-label">Next Reset:</div>
+        <div id="countdownDisplay" class="countdown-display">00:00:00:00</div>
+    </div>
+    <script src="/countdown.js"></script>
+</body>
+</html>
+`,
+      'public/countdown.js': `// Reset Countdown Timer
+// Configure reset time (daily reset at midnight UTC, adjust as needed)
+function getNextResetTime() {
+    const now = new Date();
+    const resetTime = new Date();
+    
+    // Set reset time (default: daily at midnight UTC)
+    // Change this to your desired reset schedule
+    resetTime.setUTCHours(0, 0, 0, 0);
+    
+    // If reset time has passed today, set for tomorrow
+    if (resetTime <= now) {
+        resetTime.setUTCDate(resetTime.getUTCDate() + 1);
+    }
+    
+    return resetTime;
+}
+
+function updateCountdown() {
+    const now = new Date();
+    const resetTime = getNextResetTime();
+    const diff = resetTime - now;
+    
+    if (diff <= 0) {
+        // Reset time has passed, get next reset
+        const nextReset = getNextResetTime();
+        updateDisplay(nextReset - now);
+        return;
+    }
+    
+    updateDisplay(diff);
+}
+
+function updateDisplay(milliseconds) {
+    const totalSeconds = Math.floor(milliseconds / 1000);
+    const days = Math.floor(totalSeconds / 86400);
+    const hours = Math.floor((totalSeconds % 86400) / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    
+    const display = \`\${String(days).padStart(2, '0')}:\${String(hours).padStart(2, '0')}:\${String(minutes).padStart(2, '0')}:\${String(seconds).padStart(2, '0')}\`;
+    
+    const countdownElement = document.getElementById('countdownDisplay');
+    if (countdownElement) {
+        countdownElement.textContent = display;
+    }
+}
+
+// Update countdown every second
+setInterval(updateCountdown, 1000);
+updateCountdown(); // Initial update
 `,
       'public/styles.css': `* {
     margin: 0;
@@ -453,6 +615,29 @@ code {
     border-radius: 4px;
     font-family: 'Courier New', monospace;
     color: #e83e8c;
+}
+
+/* Countdown Timer Styles */
+.countdown-container {
+    margin-top: 30px;
+    padding: 20px;
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: 12px;
+}
+
+.countdown-label {
+    font-size: 1rem;
+    color: #666;
+    margin-bottom: 10px;
+    font-weight: 600;
+}
+
+.countdown-display {
+    font-size: 2rem;
+    font-weight: bold;
+    font-family: 'Courier New', monospace;
+    color: #667eea;
+    letter-spacing: 2px;
 }
 `,
       '.gitignore': `node_modules/
@@ -528,14 +713,92 @@ client.once('ready', () => {
   console.log('✅ Discord client ready:', client.user?.tag || '(unknown user)');
 });
 
+// Timer state management
+let timerState = {
+  isPaused: false,
+  pauseReason: null,
+  pauseMessage: null
+};
+
 client.on('messageCreate', async (message) => {
   try {
     if (!DISCORD_PREFIX_ENABLED) return;
     if (!message || !message.content) return;
     if (message.author?.bot) return;
     const content = message.content.trim();
+    
+    // Handle ping command
     if (content === \`\${DISCORD_PREFIX}ping\`) {
       await message.reply('pong');
+    }
+    
+    // Handle pause command: !pause [reason]
+    if (content.startsWith(\`\${DISCORD_PREFIX}pause\`)) {
+      const reason = content.slice(\`\${DISCORD_PREFIX}pause\`.length).trim() || 'No reason provided';
+      
+      if (timerState.isPaused) {
+        await message.reply('Timer is already paused.');
+        return;
+      }
+      
+      timerState.isPaused = true;
+      timerState.pauseReason = reason;
+      
+      // Send pause message and store it for deletion later
+      const pauseMsg = await message.channel.send(\`⏸️ **Timer Paused**\\n**REASON:** \${reason}\`);
+      timerState.pauseMessage = pauseMsg;
+      
+      await message.react('✅');
+    }
+    
+    // Handle resume command: !resume
+    if (content === \`\${DISCORD_PREFIX}resume\`) {
+      if (!timerState.isPaused) {
+        await message.reply('Timer is not paused.');
+        return;
+      }
+      
+      // Reset timer state first
+      timerState.isPaused = false;
+      const pauseReason = timerState.pauseReason;
+      timerState.pauseReason = null;
+      
+      // Handle the pause message - edit it to show resumed status for browser sources
+      if (timerState.pauseMessage) {
+        try {
+          // Edit the message to show it's been resumed (better for browser sources)
+          await timerState.pauseMessage.edit('▶️ **Timer Resumed**\\n~~Timer was paused~~');
+          
+          // Then try to delete it after a short delay
+          setTimeout(async () => {
+            try {
+              await timerState.pauseMessage.delete();
+            } catch (deleteErr) {
+              // If deletion fails, that's okay - the edit already shows it's resumed
+              // Browser sources will see the updated message content
+              console.log('Pause message edited to show resumed status (deletion optional)');
+            }
+          }, 2000);
+        } catch (editErr) {
+          // If edit fails, try to delete instead
+          try {
+            await timerState.pauseMessage.delete();
+          } catch (deleteErr) {
+            // If both fail, send a new message to ensure browser sources see the update
+            try {
+              await message.channel.send('▶️ **Timer Resumed**');
+            } catch (sendErr) {
+              console.warn('Could not update pause message:', sendErr.message);
+            }
+          }
+        }
+        timerState.pauseMessage = null;
+      } else {
+        // If no pause message exists, send a resume message anyway
+        await message.channel.send('▶️ **Timer Resumed**');
+      }
+      
+      await message.reply('▶️ Timer resumed!');
     }
   } catch (err) {
     console.error('messageCreate handler error:', err);

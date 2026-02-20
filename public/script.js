@@ -17,6 +17,22 @@ async function checkAuthStatus() {
     }
 }
 
+// Handle page visibility changes (pause refresh when tab is hidden)
+document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+        // Page is hidden, pause auto-refresh
+        if (refreshInterval) {
+            clearInterval(refreshInterval);
+            refreshInterval = null;
+        }
+    } else {
+        // Page is visible again, resume auto-refresh if needed
+        if (currentPage === 'manage' || currentPage === 'images') {
+            startAutoRefresh(currentPage);
+        }
+    }
+});
+
 function showLogin() {
     document.getElementById('loginCard').style.display = 'block';
     document.getElementById('dashboard').style.display = 'none';
@@ -29,6 +45,12 @@ function showDashboard() {
 }
 
 function showPage(pageName) {
+    // Clear any existing refresh interval
+    if (refreshInterval) {
+        clearInterval(refreshInterval);
+        refreshInterval = null;
+    }
+    
     // Hide all pages
     document.querySelectorAll('.page-content').forEach(page => {
         page.style.display = 'none';
@@ -51,16 +73,47 @@ function showPage(pageName) {
         navBtn.classList.add('active');
     }
     
+    // Update current page
+    currentPage = pageName;
+    
     // Load data if needed
     if (pageName === 'manage') {
         loadManage();
+        // Start auto-refresh for manage page
+        startAutoRefresh('manage');
     } else if (pageName === 'wizard') {
         initWizard();
     } else if (pageName === 'discord') {
         // Nothing to pre-load right now (kept for symmetry / future)
     } else if (pageName === 'images') {
         loadImages();
+        // Start auto-refresh for images page
+        startAutoRefresh('images');
     }
+}
+
+// Start auto-refresh for pages that need it
+function startAutoRefresh(pageName) {
+    // Clear any existing interval
+    if (refreshInterval) {
+        clearInterval(refreshInterval);
+    }
+    
+    // Set up new interval to refresh every 5 seconds
+    refreshInterval = setInterval(() => {
+        // Only refresh if we're still on the same page
+        if (currentPage === pageName) {
+            if (pageName === 'manage') {
+                loadManage();
+            } else if (pageName === 'images') {
+                loadImages();
+            }
+        } else {
+            // If we've switched pages, clear the interval
+            clearInterval(refreshInterval);
+            refreshInterval = null;
+        }
+    }, 5000); // 5 seconds
 }
 
 // Load and match repositories with apps
@@ -74,6 +127,10 @@ let manageData = {
 };
 
 let currentManageTab = 'matched';
+
+// Auto-refresh interval management
+let refreshInterval = null;
+let currentPage = 'create';
 
 // Switch between manage tabs
 function switchManageTab(tab) {
@@ -1052,6 +1109,12 @@ loginForm.addEventListener('submit', async (e) => {
 
 // Logout function
 async function logout() {
+    // Clear refresh interval on logout
+    if (refreshInterval) {
+        clearInterval(refreshInterval);
+        refreshInterval = null;
+    }
+    
     try {
         const response = await fetch('/api/logout', {
             method: 'POST',
