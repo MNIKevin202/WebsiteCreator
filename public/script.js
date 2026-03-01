@@ -22,12 +22,14 @@ document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
         // Page is hidden, pause auto-refresh
         if (refreshInterval) {
+            console.log('[Auto-Refresh] Page hidden, pausing auto-refresh');
             clearInterval(refreshInterval);
             refreshInterval = null;
         }
     } else {
         // Page is visible again, resume auto-refresh if needed
         if (currentPage === 'manage' || currentPage === 'images') {
+            console.log(`[Auto-Refresh] Page visible again, resuming auto-refresh for ${currentPage} page`);
             startAutoRefresh(currentPage);
         }
     }
@@ -47,6 +49,7 @@ function showDashboard() {
 function showPage(pageName) {
     // Clear any existing refresh interval
     if (refreshInterval) {
+        console.log(`[Auto-Refresh] Clearing refresh interval when switching to ${pageName} page`);
         clearInterval(refreshInterval);
         refreshInterval = null;
     }
@@ -97,12 +100,18 @@ function startAutoRefresh(pageName) {
     // Clear any existing interval
     if (refreshInterval) {
         clearInterval(refreshInterval);
+        console.log(`[Auto-Refresh] Stopped previous refresh interval for ${pageName}`);
     }
+    
+    console.log(`[Auto-Refresh] Starting auto-refresh for ${pageName} page (every 5 seconds)`);
     
     // Set up new interval to refresh every 5 seconds
     refreshInterval = setInterval(() => {
         // Only refresh if we're still on the same page
         if (currentPage === pageName) {
+            const timestamp = new Date().toLocaleTimeString();
+            console.log(`[Auto-Refresh] ${timestamp} - Refreshing ${pageName} page...`);
+            
             if (pageName === 'manage') {
                 loadManage();
             } else if (pageName === 'images') {
@@ -110,6 +119,7 @@ function startAutoRefresh(pageName) {
             }
         } else {
             // If we've switched pages, clear the interval
+            console.log(`[Auto-Refresh] Page changed from ${pageName} to ${currentPage}, stopping refresh`);
             clearInterval(refreshInterval);
             refreshInterval = null;
         }
@@ -354,6 +364,7 @@ function updateMatchedPairCheckbox(repoName, appName) {
 }
 
 async function loadManage() {
+    console.log('[loadManage] Starting to load manage data...');
     const manageLoading = document.getElementById('manageLoading');
     const manageList = document.getElementById('manageList');
     const manageError = document.getElementById('manageError');
@@ -444,8 +455,10 @@ async function loadManage() {
         // Render the initial tab
         renderManageTab(currentManageTab);
         manageList.style.display = 'block';
+        console.log(`[loadManage] ✅ Successfully loaded ${repos.length} repos and ${apps.length} apps`);
         
     } catch (error) {
+        console.error('[loadManage] ❌ Error loading manage data:', error);
         manageLoading.style.display = 'none';
         manageErrorContent.textContent = error.message || 'Failed to load repositories and apps';
         manageError.style.display = 'block';
@@ -2565,6 +2578,7 @@ function resetWizard() {
 // Image Management
 // =========================
 async function loadImages() {
+    console.log('[loadImages] Starting to load images...');
     const imagesLoading = document.getElementById('imagesLoading');
     const imagesList = document.getElementById('imagesList');
     const imagesError = document.getElementById('imagesError');
@@ -2648,7 +2662,9 @@ async function loadImages() {
         imagesContent.innerHTML = html;
         imagesLoading.style.display = 'none';
         imagesList.style.display = 'block';
+        console.log(`[loadImages] ✅ Successfully loaded ${appsWithCounts.length} apps with image counts`);
     } catch (error) {
+        console.error('[loadImages] ❌ Error loading images:', error);
         imagesLoading.style.display = 'none';
         imagesErrorContent.textContent = error.message || 'Failed to load apps';
         imagesError.style.display = 'block';
