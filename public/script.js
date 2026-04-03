@@ -1990,9 +1990,11 @@ let wizardData = {
     projectName: '',
     githubRepo: '',
     darkMode: null,
+    caproverApp: '',
     port: '',
     varsOnCapRover: null,
     selectedVars: [],
+    customEnvVars: '',
     details: '',
     discordCommandStyle: null, // 'prefix' | 'slash' | 'both'
     discordPrefix: '!',
@@ -2002,11 +2004,33 @@ let wizardData = {
 
 let currentWizardStep = 0;
 let wizardRepos = [];
+let wizardCaproverApps = [];
+
+function getWizardMergedEnvVarNames() {
+    const custom = (wizardData.customEnvVars || '')
+        .split('\n')
+        .map(s => s.trim())
+        .filter(Boolean);
+    const seen = new Set();
+    const out = [];
+    for (const v of [...wizardData.selectedVars, ...custom]) {
+        if (!seen.has(v)) {
+            seen.add(v);
+            out.push(v);
+        }
+    }
+    return out;
+}
 
 function getWizardSteps() {
     const repoOptions = wizardRepos.map(repo => ({
         value: repo.html_url,
         label: `${repo.name} (${repo.html_url})`
+    }));
+
+    const caproverAppOptions = wizardCaproverApps.map(app => ({
+        value: app.appName,
+        label: `${app.appName} — port ${app.containerHttpPort != null ? app.containerHttpPort : '?'}`
     }));
 
     const typeStep = {
@@ -2047,12 +2071,12 @@ function getWizardSteps() {
                 key: 'darkMode'
             },
             {
-                question: 'What is the port?',
-                type: 'number',
-                key: 'port',
-                placeholder: '3000',
-                min: 3000,
-                max: 65535
+                question: 'Select CapRover app (container HTTP port is taken from CapRover):',
+                type: 'select',
+                key: 'caproverApp',
+                options: caproverAppOptions,
+                required: false,
+                selectKind: 'caprover'
             },
             {
                 question: 'Are the variables stored on CapRover?',
@@ -2064,7 +2088,7 @@ function getWizardSteps() {
                 type: 'checkboxes',
                 key: 'selectedVars',
                 options: [
-                    'MONGO_URI',
+                    'mongoDB_URI',
                     'SHIPENGINE_API_KEY',
                     'AFTERSHIP_API_KEY',
                     'OPENAI_API_KEY',
@@ -2082,6 +2106,13 @@ function getWizardSteps() {
                     'MAIL_PWRESET_EMAIL',
                     'STAXXIO_SSO_SECRET'
                 ]
+            },
+            {
+                question: 'Additional environment variable names (optional, one per line):',
+                type: 'textarea',
+                key: 'customEnvVars',
+                placeholder: 'MY_CUSTOM_KEY\nANOTHER_SECRET',
+                required: false
             },
             {
                 question: 'Details on the website:',
@@ -2118,12 +2149,12 @@ function getWizardSteps() {
             required: false
         },
         {
-            question: 'What is the port?',
-            type: 'number',
-            key: 'port',
-            placeholder: '3000',
-            min: 3000,
-            max: 65535
+            question: 'Select CapRover app (container HTTP port is taken from CapRover):',
+            type: 'select',
+            key: 'caproverApp',
+            options: caproverAppOptions,
+            required: false,
+            selectKind: 'caprover'
         },
         {
             question: 'What command style do you want?',
@@ -2183,6 +2214,13 @@ function getWizardSteps() {
             ]
         },
         {
+            question: 'Additional environment variable names (optional, one per line):',
+            type: 'textarea',
+            key: 'customEnvVars',
+            placeholder: 'MY_CUSTOM_KEY\nANOTHER_SECRET',
+            required: false
+        },
+        {
             question: 'Bot details / behavior:',
             type: 'textarea',
             key: 'details',
@@ -2208,9 +2246,11 @@ async function initWizard() {
         projectName: '',
         githubRepo: '',
         darkMode: null,
+        caproverApp: '',
         port: '',
         varsOnCapRover: null,
         selectedVars: [],
+        customEnvVars: '',
         details: '',
         discordCommandStyle: null,
         discordPrefix: '!',
@@ -2229,6 +2269,19 @@ async function initWizard() {
         }
     } catch (error) {
         console.error('Failed to load repos for wizard:', error);
+    }
+
+    wizardCaproverApps = [];
+    try {
+        const appsResponse = await fetch('/api/apps', { credentials: 'include' });
+        if (appsResponse.ok) {
+            const appsData = await appsResponse.json();
+            if (appsData.success && Array.isArray(appsData.apps)) {
+                wizardCaproverApps = appsData.apps;
+            }
+        }
+    } catch (error) {
+        console.error('Failed to load CapRover apps for wizard:', error);
     }
     
     renderWizardStep();
@@ -2340,6 +2393,15 @@ function renderWizardStep() {
             </div>
         `;
     } else if (step.type === 'select') {
+        const isCaprover = step.selectKind === 'caprover';
+        const selectPlaceholder = isCaprover
+            ? '-- Select a CapRover app (optional) --'
+            : '-- Select a repository (optional) --';
+        const selectHelp = isCaprover
+            ? (wizardCaproverApps.length === 0
+                ? 'No apps returned from CapRover. Check credentials or create an app first; you can still continue without selecting.'
+                : 'The container HTTP port shown is read from CapRover and used in the generated prompt (listen on process.env.PORT in code).')
+            : 'Select a GitHub repository to include in the Cursor AI message';
         html += `
             <div class="form-group">
                 <select 
@@ -2348,7 +2410,7 @@ function renderWizardStep() {
                     style="width: 100%; padding: 14px 18px; background: var(--bg-color); border: 2px solid var(--border-color); border-radius: 12px; color: var(--text-primary); font-size: 1rem; cursor: pointer;"
                     ${step.required ? 'required' : ''}
                 >
-                    <option value="">-- Select a repository (optional) --</option>
+                    <option value="">${escapeHtml(selectPlaceholder)}</option>
                     ${step.options.map(opt => `
                         <option value="${escapeHtml(opt.value)}" ${wizardData[step.key] === opt.value ? 'selected' : ''}>
                             ${escapeHtml(opt.label)}
@@ -2356,7 +2418,7 @@ function renderWizardStep() {
                     `).join('')}
                 </select>
                 <small style="display: block; margin-top: 8px; color: var(--text-secondary);">
-                    Select a GitHub repository to include in the Cursor AI message
+                    ${escapeHtml(selectHelp)}
                 </small>
             </div>
         `;
@@ -2452,6 +2514,11 @@ function wizardNext() {
         }
         
         wizardData[step.key] = input.value.trim();
+        if (step.type === 'select' && step.selectKind === 'caprover') {
+            const app = wizardCaproverApps.find(a => a.appName === wizardData.caproverApp);
+            wizardData.port =
+                app && app.containerHttpPort != null ? String(app.containerHttpPort) : '';
+        }
     } else if ((step.type === 'yesno' || step.type === 'choice') && (wizardData[step.key] === null || wizardData[step.key] === '')) {
         showToast('Please select an option', 'warning');
         return;
@@ -2471,7 +2538,8 @@ function wizardPrevious() {
 function generateWizardMessage() {
     const type = wizardData.wizardType || 'website';
     const name = wizardData.projectName || '(name not set)';
-    const port = wizardData.port || '3000';
+    const port = wizardData.port;
+    const envVarNames = getWizardMergedEnvVarNames();
     const varsWhere = wizardData.varsOnCapRover ? 'Environment variables are stored on CapRover.' : 'Environment variables are stored locally.';
 
     let message = '';
@@ -2484,11 +2552,17 @@ function generateWizardMessage() {
 
         message += `This application will be hosted on CapRover. Make sure to include all necessary files for CapRover deployment, including a Dockerfile and captain-definition file.\n\n`;
         message += `${wizardData.darkMode ? 'Use dark mode styling.' : 'Use light mode styling.'}\n\n`;
-        message += `The application should run on port ${port}.\n\n`;
+        if (wizardData.caproverApp && port) {
+            message += `CapRover app: ${wizardData.caproverApp}. Container HTTP port ${port} comes from CapRover; listen on process.env.PORT in the app so it matches CapRover.\n\n`;
+        } else if (wizardData.caproverApp) {
+            message += `CapRover app: ${wizardData.caproverApp}. Set the container HTTP port in CapRover to match what the server listens on (process.env.PORT).\n\n`;
+        } else {
+            message += `Select a CapRover app in the deployment UI to align the container HTTP port, or configure it in CapRover; the server should use process.env.PORT.\n\n`;
+        }
         message += `${varsWhere}\n\n`;
 
-        if (wizardData.selectedVars.length > 0) {
-            message += `The following environment variables are used (CapRover env var names):\n${wizardData.selectedVars.map(v => `- ${v}`).join('\n')}\n\n`;
+        if (envVarNames.length > 0) {
+            message += `The following environment variables are used (CapRover env var names):\n${envVarNames.map(v => `- ${v}`).join('\n')}\n\n`;
         } else {
             message += `No specific environment variables are required.\n\n`;
         }
@@ -2502,8 +2576,9 @@ function generateWizardMessage() {
         // Discord Bot
         const commandStyle = wizardData.discordCommandStyle || 'prefix';
         const prefix = wizardData.discordPrefix || '!';
-        const selectedVars = wizardData.selectedVars.length > 0
-            ? wizardData.selectedVars
+        const merged = getWizardMergedEnvVarNames();
+        const selectedVars = merged.length > 0
+            ? merged
             : [
                 'DISCORD_APPLICATION_ID',
                 'DISCORD_SECRET',
@@ -2529,7 +2604,13 @@ function generateWizardMessage() {
         }
 
         message += `This bot will be hosted on CapRover. Include a Dockerfile and captain-definition for CapRover deployment.\n\n`;
-        message += `Run an HTTP server on port ${port} (use process.env.PORT) with a health endpoint at /api/health.\n\n`;
+        if (wizardData.caproverApp && port) {
+            message += `CapRover app: ${wizardData.caproverApp}. Container HTTP port ${port} comes from CapRover; run the HTTP server on process.env.PORT with a health endpoint at /api/health.\n\n`;
+        } else if (wizardData.caproverApp) {
+            message += `CapRover app: ${wizardData.caproverApp}. Set the container HTTP port in CapRover; run the HTTP server on process.env.PORT with a health endpoint at /api/health.\n\n`;
+        } else {
+            message += `Run an HTTP server on process.env.PORT with a health endpoint at /api/health. Align the CapRover container HTTP port in the dashboard.\n\n`;
+        }
         message += `${varsWhere}\n\n`;
         message += `CapRover environment variable names to use (include these EXACT names in the code and README):\n`;
         message += `- PORT\n${selectedVars.map(v => `- ${v}`).join('\n')}\n\n`;
