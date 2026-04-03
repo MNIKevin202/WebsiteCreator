@@ -2005,6 +2005,8 @@ let wizardData = {
 let currentWizardStep = 0;
 let wizardRepos = [];
 let wizardCaproverApps = [];
+/** When true, the custom env var textarea is visible on the variables step */
+let wizardCustomEnvVarsExpanded = false;
 
 function getWizardMergedEnvVarNames() {
     const custom = (wizardData.customEnvVars || '')
@@ -2108,13 +2110,6 @@ function getWizardSteps() {
                 ]
             },
             {
-                question: 'Additional environment variable names (optional, one per line):',
-                type: 'textarea',
-                key: 'customEnvVars',
-                placeholder: 'MY_CUSTOM_KEY\nANOTHER_SECRET',
-                required: false
-            },
-            {
                 question: 'Details on the website:',
                 type: 'textarea',
                 key: 'details',
@@ -2214,13 +2209,6 @@ function getWizardSteps() {
             ]
         },
         {
-            question: 'Additional environment variable names (optional, one per line):',
-            type: 'textarea',
-            key: 'customEnvVars',
-            placeholder: 'MY_CUSTOM_KEY\nANOTHER_SECRET',
-            required: false
-        },
-        {
             question: 'Bot details / behavior:',
             type: 'textarea',
             key: 'details',
@@ -2283,6 +2271,8 @@ async function initWizard() {
     } catch (error) {
         console.error('Failed to load CapRover apps for wizard:', error);
     }
+
+    wizardCustomEnvVarsExpanded = false;
     
     renderWizardStep();
 }
@@ -2423,7 +2413,8 @@ function renderWizardStep() {
             </div>
         `;
     } else if (step.type === 'checkboxes') {
-        html += '<div class="wizard-checkboxes" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; margin-bottom: 24px;">';
+        const showCustomPanel = wizardCustomEnvVarsExpanded;
+        html += '<div class="wizard-checkboxes" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; margin-bottom: 16px;">';
         step.options.forEach(option => {
             const isChecked = wizardData[step.key].includes(option);
             html += `
@@ -2440,6 +2431,31 @@ function renderWizardStep() {
             `;
         });
         html += '</div>';
+        html += `
+            <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; align-items: center;">
+                <button type="button" class="btn-secondary" onclick="wizardToggleCustomEnvVarsPanel()" style="display: inline-flex; align-items: center; gap: 8px;">
+                    ${showCustomPanel ? 'Hide custom variables' : 'Add custom variables'}
+                </button>
+                <button type="button" class="btn-secondary" onclick="copyWizardEnvVarsForCapRover()" style="display: inline-flex; align-items: center; gap: 8px;">
+                    Copy all for CapRover
+                </button>
+            </div>
+            <small style="display: block; margin-bottom: 12px; color: var(--text-secondary);">
+                Copy uses <code style="font-size: 0.85em;">KEY=</code> lines (empty values) so you can paste into CapRover or a <code style="font-size: 0.85em;">.env</code> file and fill in secrets.
+            </small>
+            <div id="wizardCustomEnvVarsWrap" style="display: ${showCustomPanel ? 'block' : 'none'};">
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label for="wizardCustomEnvVarsInput" style="display: block; margin-bottom: 8px; color: var(--text-secondary); font-size: 0.9rem;">Custom names (one per line)</label>
+                    <textarea
+                        id="wizardCustomEnvVarsInput"
+                        class="form-input"
+                        placeholder="MY_CUSTOM_KEY\nANOTHER_SECRET"
+                        oninput="wizardSyncCustomEnvVars()"
+                        style="width: 100%; min-height: 120px; padding: 14px 18px; background: var(--bg-color); border: 2px solid var(--border-color); border-radius: 12px; color: var(--text-primary); font-size: 1rem; font-family: ui-monospace, monospace; resize: vertical;"
+                    >${escapeHtml(wizardData.customEnvVars || '')}</textarea>
+                </div>
+            </div>
+        `;
     } else if (step.type === 'textarea') {
         html += `
             <div class="form-group">
@@ -2481,7 +2497,34 @@ function setWizardValue(key, value) {
     renderWizardStep();
 }
 
+function wizardSyncCustomEnvVars() {
+    const el = document.getElementById('wizardCustomEnvVarsInput');
+    if (el) wizardData.customEnvVars = el.value;
+}
+
+function wizardToggleCustomEnvVarsPanel() {
+    wizardSyncCustomEnvVars();
+    wizardCustomEnvVarsExpanded = !wizardCustomEnvVarsExpanded;
+    renderWizardStep();
+}
+
+function copyWizardEnvVarsForCapRover() {
+    wizardSyncCustomEnvVars();
+    const names = getWizardMergedEnvVarNames();
+    if (names.length === 0) {
+        showToast('Select at least one variable or add a custom name', 'warning');
+        return;
+    }
+    const text = names.map(n => `${n}=`).join('\n');
+    navigator.clipboard.writeText(text).then(() => {
+        showToast('Copied KEY= lines for CapRover', 'success');
+    }).catch(() => {
+        showToast('Failed to copy', 'error');
+    });
+}
+
 function toggleWizardVar(varName) {
+    wizardSyncCustomEnvVars();
     const index = wizardData.selectedVars.indexOf(varName);
     if (index > -1) {
         wizardData.selectedVars.splice(index, 1);
@@ -2519,6 +2562,8 @@ function wizardNext() {
             wizardData.port =
                 app && app.containerHttpPort != null ? String(app.containerHttpPort) : '';
         }
+    } else if (step.type === 'checkboxes') {
+        wizardSyncCustomEnvVars();
     } else if ((step.type === 'yesno' || step.type === 'choice') && (wizardData[step.key] === null || wizardData[step.key] === '')) {
         showToast('Please select an option', 'warning');
         return;
