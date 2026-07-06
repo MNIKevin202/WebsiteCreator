@@ -3,21 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Website Creator - Login</title>
+    <title>Website Creator</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>🚀 Website Creator</h1>
-            <p class="subtitle">Automate GitHub repo creation and CapRover app setup</p>
-        </header>
-
-        <main>
-            <!-- Login Form -->
-            <div id="loginCard" class="form-card">
-                <h2>🔐 Login</h2>
-                <p style="color: var(--text-secondary); margin-bottom: 24px;">Please login to access the website creator</p>
+    <!-- Login View -->
+    <div id="loginView" class="login-view">
+        <div class="login-brand">
+            <div class="brand-logo">🚀</div>
+            <div>
+                <h1>Website Creator</h1>
+                <p class="subtitle">Automate GitHub repo creation and CapRover app setup</p>
+            </div>
+        </div>
+        <div id="loginCard" class="login-card">
+            <h2>Welcome back</h2>
+            <p class="login-hint">Sign in to manage your services.</p>
                 <form id="loginForm">
                     <div class="form-group">
                         <label for="username">Username *</label>
@@ -52,18 +56,16 @@
                     <div id="loginErrorContent"></div>
                 </div>
             </div>
+        </div>
 
-            <!-- Dashboard (shown after login) -->
-            <div id="dashboard" style="display: none;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
-                    <h2>Dashboard</h2>
-                    <button onclick="logout()" class="btn-secondary" style="width: auto; padding: 8px 16px;">
-                        Logout
-                    </button>
-                </div>
-
-                <!-- Navigation Menu -->
-                <nav class="nav-menu">
+    <!-- App Shell (shown after login) -->
+    <div id="dashboard" class="app-shell" style="display: none;">
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-brand">
+                <span class="brand-logo">🚀</span>
+                <span class="brand-name">Website Creator</span>
+            </div>
+            <nav class="sidebar-nav">
                     <button onclick="showPage('create')" id="nav-create" class="nav-btn active">
                         Create Website
                     </button>
@@ -94,7 +96,20 @@
                     <button onclick="showPage('diagnostics')" id="nav-diagnostics" class="nav-btn">
                         Diagnostics
                     </button>
-                </nav>
+            </nav>
+            <div class="sidebar-footer">
+                <button onclick="logout()" class="btn-logout">
+                    <span>⎋</span> Logout
+                </button>
+            </div>
+        </aside>
+
+        <div class="main-area">
+            <header class="topbar">
+                <button class="sidebar-toggle" onclick="toggleSidebar()" aria-label="Toggle menu">☰</button>
+                <h1 id="pageTitle">Create Website</h1>
+            </header>
+            <main class="content-area">
 
                 <!-- Create Website Page -->
                 <div id="page-create" class="page-content">
@@ -523,13 +538,10 @@
                         <div id="diagLogsConsole" class="reboot-console" style="height: 460px;"></div>
                     </div>
                 </div>
-            </div>
-        </main>
-
-        <footer>
-            <p>Made with ❤️ for CapRover automation</p>
-        </footer>
+            </main>
+        </div>
     </div>
+    <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
 
     <!-- Error Modal -->
     <div id="errorModal" class="modal" style="display: none;">

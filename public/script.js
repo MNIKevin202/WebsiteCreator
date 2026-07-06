@@ -36,15 +36,38 @@ document.addEventListener('visibilitychange', () => {
 });
 
 function showLogin() {
-    document.getElementById('loginCard').style.display = 'block';
+    document.getElementById('loginView').style.display = 'flex';
     document.getElementById('dashboard').style.display = 'none';
 }
 
 function showDashboard() {
-    document.getElementById('loginCard').style.display = 'none';
-    document.getElementById('dashboard').style.display = 'block';
+    document.getElementById('loginView').style.display = 'none';
+    document.getElementById('dashboard').style.display = 'flex';
     showPage('create'); // Default to create page
 }
+
+// Sidebar (mobile) toggle
+function toggleSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebarOverlay');
+    if (!sidebar) return;
+    const open = sidebar.classList.toggle('open');
+    if (overlay) overlay.classList.toggle('visible', open);
+}
+
+// Human-readable titles for the top bar
+const PAGE_TITLES = {
+    create: 'Create Website',
+    discord: 'Create Discord Bot',
+    manage: 'Manage',
+    wizard: 'Wizard',
+    info: 'Info',
+    images: 'Image Management',
+    reboot: 'Reboot VPS',
+    system: 'System',
+    logs: 'Logs',
+    diagnostics: 'Diagnostics'
+};
 
 function showPage(pageName) {
     // Clear any existing refresh interval
@@ -92,6 +115,16 @@ function showPage(pageName) {
     
     // Update current page
     currentPage = pageName;
+
+    // Update the top-bar title and close the mobile sidebar
+    const titleEl = document.getElementById('pageTitle');
+    if (titleEl && PAGE_TITLES[pageName]) titleEl.textContent = PAGE_TITLES[pageName];
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebarOverlay');
+    if (sidebar && sidebar.classList.contains('open')) {
+        sidebar.classList.remove('open');
+        if (overlay) overlay.classList.remove('visible');
+    }
     
     // Load data if needed
     if (pageName === 'manage') {

@@ -5,6 +5,7 @@ const axios = require('axios');
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const session = require('express-session');
+const MongoStore = require('connect-mongo');
 const {
   caproverLogin,
   caproverEnsureApp,
@@ -64,17 +65,36 @@ app.use(cors({
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
+// Trust the CapRover/nginx reverse proxy so secure cookies are set correctly over HTTPS
+app.set('trust proxy', 1);
+
 // Session configuration
-app.use(session({
+// Persist sessions in MongoDB so they survive server restarts/redeploys (the default
+// in-memory store loses every session on redeploy, which forced constant re-logins).
+const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+const sessionConfig = {
   secret: process.env.SESSION_SECRET || 'your-secret-key-change-in-production',
   resave: false,
   saveUninitialized: false,
+  rolling: true, // refresh the 30-day window on activity
   cookie: {
     secure: process.env.NODE_ENV === 'production',
     httpOnly: true,
-    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+    sameSite: 'lax',
+    maxAge: THIRTY_DAYS_MS
   }
-}));
+};
+if (process.env.MONGO_URI) {
+  sessionConfig.store = MongoStore.create({
+    mongoUrl: process.env.MONGO_URI,
+    dbName: 'WebsiteCreator',
+    collectionName: 'sessions',
+    ttl: THIRTY_DAYS_MS / 1000
+  });
+} else {
+  console.warn(`[${new Date().toISOString()}] ⚠️  Sessions using in-memory store (no MONGO_URI) — logins won't survive restarts`);
+}
+app.use(session(sessionConfig));
 
 app.use(express.static('public'));
 
