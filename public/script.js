@@ -149,6 +149,7 @@ let currentPage = 'create';
 let pinnedApps = new Set();
 let rebootApps = [];
 let rebootBuilding = false;
+let activeConsoleApp = null; // which app's inline console is currently receiving logs
 
 // Switch between manage tabs
 function switchManageTab(tab) {
@@ -2931,21 +2932,30 @@ function renderRebootLists() {
         pinnedList.forEach(app => {
             const name = escapeHtml(app.appName);
             html += `
-                <div class="manage-item-single reboot-item" data-app-name="${name}">
-                    <div style="flex: 1;">
-                        <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 4px;">📌 ${name}</div>
-                        <div style="font-size: 0.85rem; color: var(--text-secondary);">
-                            Port: ${app.containerHttpPort || 'N/A'} | Instances: ${app.instanceCount || 1}
+                <div class="reboot-app-block">
+                    <div class="manage-item-single reboot-item" data-app-name="${name}">
+                        <div style="flex: 1;">
+                            <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 4px;">📌 ${name}</div>
+                            <div style="font-size: 0.85rem; color: var(--text-secondary);">
+                                Port: ${app.containerHttpPort || 'N/A'} | Instances: ${app.instanceCount || 1}
+                            </div>
+                        </div>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <a href="${CAPROVER_DASHBOARD}/#/apps/details/${name}" target="_blank" class="manage-app-link" title="Open in CapRover">🔗 CapRover</a>
+                            <button onclick="forceBuildSingle('${name}')" class="btn-primary reboot-build-btn" style="width: auto; padding: 8px 16px; font-size: 0.9rem;" ${rebootBuilding ? 'disabled' : ''}>
+                                Force Build
+                            </button>
+                            <button onclick="togglePin('${name}')" class="btn-secondary reboot-unpin-btn" style="width: auto; padding: 8px 16px; font-size: 0.9rem;" ${rebootBuilding ? 'disabled' : ''}>
+                                Unpin
+                            </button>
                         </div>
                     </div>
-                    <div style="display: flex; gap: 8px; align-items: center;">
-                        <a href="${CAPROVER_DASHBOARD}/#/apps/details/${name}" target="_blank" class="manage-app-link" title="Open in CapRover">🔗 CapRover</a>
-                        <button onclick="forceBuildApp('${name}')" class="btn-primary" style="width: auto; padding: 8px 16px; font-size: 0.9rem;" ${rebootBuilding ? 'disabled' : ''}>
-                            Force Build
-                        </button>
-                        <button onclick="togglePin('${name}')" class="btn-secondary" style="width: auto; padding: 8px 16px; font-size: 0.9rem;" ${rebootBuilding ? 'disabled' : ''}>
-                            Unpin
-                        </button>
+                    <div class="reboot-console-wrap reboot-inline-console" id="console-wrap-${name}" style="display: none;">
+                        <div class="reboot-console-header">
+                            <span>Build log — ${name}</span>
+                            <button onclick="clearRebootConsole('${name}')" class="btn-secondary" style="width: auto; padding: 6px 12px; font-size: 0.85rem;">Clear</button>
+                        </div>
+                        <div class="reboot-console" id="console-${name}"></div>
                     </div>
                 </div>
             `;
@@ -3033,10 +3043,11 @@ async function togglePin(appName) {
     }
 }
 
-// ── Console helpers ──
+// ── Console helpers (each app has its own inline console under its row) ──
 
-function rebootLog(message, type = 'info') {
-    const consoleEl = document.getElementById('rebootConsole');
+function rebootLog(message, type = 'info', appName = activeConsoleApp) {
+    if (!appName) return;
+    const consoleEl = document.getElementById(`console-${appName}`);
     if (!consoleEl) return;
     const line = document.createElement('div');
     line.className = `rc-line rc-${type}`;
@@ -3046,13 +3057,36 @@ function rebootLog(message, type = 'info') {
     consoleEl.scrollTop = consoleEl.scrollHeight;
 }
 
-function clearRebootConsole() {
-    const consoleEl = document.getElementById('rebootConsole');
+function clearRebootConsole(appName) {
+    const consoleEl = document.getElementById(`console-${appName}`);
     if (consoleEl) consoleEl.innerHTML = '';
 }
 
-// Force build a single app and stream its build logs to the console.
+// Enable/disable the reboot controls without re-rendering (which would wipe live consoles).
+function setRebootBusy(busy) {
+    rebootBuilding = busy;
+    const page = document.getElementById('page-reboot');
+    if (page) {
+        page.querySelectorAll('.reboot-build-btn, .reboot-unpin-btn, .pin-toggle').forEach(b => {
+            b.disabled = busy;
+        });
+    }
+    const allBtn = document.getElementById('forceBuildAllBtn');
+    if (allBtn) allBtn.disabled = busy || pinnedApps.size === 0;
+}
+
+// Force build one app, streaming its logs into that app's own inline console.
+// Assumes buttons are already disabled by the caller (forceBuildSingle / forceBuildAllPinned).
 async function forceBuildApp(appName) {
+    // Route all logs for this run into this app's console, reveal it, and scroll to it.
+    activeConsoleApp = appName;
+    const wrap = document.getElementById(`console-wrap-${appName}`);
+    if (wrap) {
+        wrap.style.display = 'block';
+        wrap.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+    clearRebootConsole(appName);
+
     rebootLog(`▶ Triggering force build for ${appName}...`, 'cmd');
 
     try {
@@ -3145,7 +3179,19 @@ async function pollBuildLogs(appName) {
     rebootLog(`⏱ Timed out waiting for ${appName} build to finish (still building?)`, 'error');
 }
 
-// Force build every pinned service, one at a time (sequential).
+// Force build a single pinned service (from its own "Force Build" button).
+async function forceBuildSingle(appName) {
+    if (rebootBuilding) return;
+    setRebootBusy(true);
+    try {
+        await forceBuildApp(appName);
+    } finally {
+        setRebootBusy(false);
+    }
+}
+
+// Force build every pinned service, one at a time (sequential). Each app's output
+// streams into its own console as it becomes the one currently building.
 async function forceBuildAllPinned() {
     if (rebootBuilding) return;
 
@@ -3159,20 +3205,14 @@ async function forceBuildAllPinned() {
         return;
     }
 
-    rebootBuilding = true;
-    renderRebootLists(); // disables buttons
-
-    rebootLog(`═══ Force-building ${targets.length} pinned service(s) ═══`, 'info');
-
-    let succeeded = 0;
-    for (const appName of targets) {
-        await forceBuildApp(appName);
-        succeeded++;
+    setRebootBusy(true);
+    try {
+        for (const appName of targets) {
+            await forceBuildApp(appName);
+        }
+    } finally {
+        setRebootBusy(false);
     }
 
-    rebootLog(`═══ Done. Processed ${succeeded}/${targets.length} service(s) ═══`, 'info');
-
-    rebootBuilding = false;
-    renderRebootLists(); // re-enables buttons
-    showToast('Force build run complete', 'success');
+    showToast(`Force build run complete (${targets.length} service(s))`, 'success');
 }

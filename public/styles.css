@@ -1137,6 +1137,23 @@ footer {
     cursor: not-allowed;
 }
 
+/* Per-app inline build console (rendered under each pinned service) */
+.reboot-app-block {
+    display: grid;
+    gap: 6px;
+}
+
+.reboot-inline-console {
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    overflow: hidden;
+    background: var(--card-bg);
+}
+
+.reboot-inline-console .reboot-console {
+    height: 240px;
+}
+
 /* Console / terminal */
 .reboot-console-wrap {
     padding: 0;
