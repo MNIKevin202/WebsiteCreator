@@ -92,6 +92,9 @@ function showPage(pageName) {
         loadImages();
         // Start auto-refresh for images page
         startAutoRefresh('images');
+    } else if (pageName === 'reboot') {
+        // No auto-refresh: it would clobber the console while builds are streaming
+        loadReboot();
     }
 }
 
@@ -141,6 +144,11 @@ let currentManageTab = 'matched';
 // Auto-refresh interval management
 let refreshInterval = null;
 let currentPage = 'create';
+
+// Reboot VPS recovery state
+let pinnedApps = new Set();
+let rebootApps = [];
+let rebootBuilding = false;
 
 // Switch between manage tabs
 function switchManageTab(tab) {
@@ -2842,7 +2850,7 @@ function deleteOldImages(appName) {
                 }
 
                 showToast(`Deleted ${data.deleted || 0} old image(s) for ${appName}. Kept ${data.kept || 5} most recent.`, 'success');
-                
+
                 // Update the image count for this app
                 await updateImageCount(appName);
             } catch (error) {
@@ -2852,4 +2860,311 @@ function deleteOldImages(appName) {
         'Delete',
         'danger'
     );
+}
+
+// ─── Reboot VPS recovery ─────────────────────────────────────────────────────
+
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// CapRover dashboard base for deep links (matches the Image Management page)
+const CAPROVER_DASHBOARD = 'https://captain.kpanel.xyz';
+
+async function loadReboot() {
+    const loading = document.getElementById('rebootLoading');
+    const main = document.getElementById('rebootMain');
+    const errorCard = document.getElementById('rebootError');
+    const errorContent = document.getElementById('rebootErrorContent');
+
+    loading.style.display = 'block';
+    main.style.display = 'none';
+    errorCard.style.display = 'none';
+
+    try {
+        const [appsResponse, pinnedResponse] = await Promise.all([
+            fetch('/api/apps', { credentials: 'include' }),
+            fetch('/api/pinned-apps', { credentials: 'include' })
+        ]);
+
+        if (appsResponse.status === 401 || pinnedResponse.status === 401) {
+            showLogin();
+            return;
+        }
+
+        const appsData = await appsResponse.json();
+        const pinnedData = await pinnedResponse.json();
+
+        if (!appsData.success) {
+            throw new Error(appsData.error || 'Failed to load apps');
+        }
+        if (!pinnedData.success) {
+            throw new Error(pinnedData.error || 'Failed to load pinned services');
+        }
+
+        rebootApps = appsData.apps || [];
+        pinnedApps = new Set(pinnedData.pinned || []);
+
+        renderRebootLists();
+
+        loading.style.display = 'none';
+        main.style.display = 'block';
+    } catch (error) {
+        console.error('[loadReboot] Error:', error);
+        loading.style.display = 'none';
+        errorContent.textContent = error.message || 'Failed to load services';
+        errorCard.style.display = 'block';
+    }
+}
+
+function renderRebootLists() {
+    const sortedApps = [...rebootApps].sort((a, b) => a.appName.localeCompare(b.appName));
+
+    // Pinned services list
+    const pinnedContainer = document.getElementById('pinnedServicesList');
+    const pinnedList = sortedApps.filter(a => pinnedApps.has(a.appName));
+
+    if (pinnedList.length === 0) {
+        pinnedContainer.innerHTML = '<div class="empty-state"><p>No pinned services yet. Pin services from the list below.</p></div>';
+    } else {
+        let html = '<div style="display: grid; gap: 12px;">';
+        pinnedList.forEach(app => {
+            const name = escapeHtml(app.appName);
+            html += `
+                <div class="manage-item-single reboot-item" data-app-name="${name}">
+                    <div style="flex: 1;">
+                        <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 4px;">📌 ${name}</div>
+                        <div style="font-size: 0.85rem; color: var(--text-secondary);">
+                            Port: ${app.containerHttpPort || 'N/A'} | Instances: ${app.instanceCount || 1}
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <a href="${CAPROVER_DASHBOARD}/#/apps/details/${name}" target="_blank" class="manage-app-link" title="Open in CapRover">🔗 CapRover</a>
+                        <button onclick="forceBuildApp('${name}')" class="btn-primary" style="width: auto; padding: 8px 16px; font-size: 0.9rem;" ${rebootBuilding ? 'disabled' : ''}>
+                            Force Build
+                        </button>
+                        <button onclick="togglePin('${name}')" class="btn-secondary" style="width: auto; padding: 8px 16px; font-size: 0.9rem;" ${rebootBuilding ? 'disabled' : ''}>
+                            Unpin
+                        </button>
+                    </div>
+                </div>
+            `;
+        });
+        html += '</div>';
+        pinnedContainer.innerHTML = html;
+    }
+
+    // All services list with pin toggles
+    const allContainer = document.getElementById('allServicesList');
+    if (sortedApps.length === 0) {
+        allContainer.innerHTML = '<div class="empty-state"><p>No CapRover apps found.</p></div>';
+    } else {
+        let html = '<div style="display: grid; gap: 8px;">';
+        sortedApps.forEach(app => {
+            const name = escapeHtml(app.appName);
+            const isPinned = pinnedApps.has(app.appName);
+            html += `
+                <div class="manage-item-single reboot-item" data-app-name="${name}">
+                    <button onclick="togglePin('${name}')" class="pin-toggle ${isPinned ? 'pinned' : ''}" title="${isPinned ? 'Unpin' : 'Pin'}" ${rebootBuilding ? 'disabled' : ''}>
+                        ${isPinned ? '★' : '☆'}
+                    </button>
+                    <div style="flex: 1;">
+                        <div style="font-weight: 600; color: var(--text-primary);">${name}</div>
+                        <div style="font-size: 0.85rem; color: var(--text-secondary);">
+                            Port: ${app.containerHttpPort || 'N/A'} | Instances: ${app.instanceCount || 1}
+                        </div>
+                    </div>
+                    <a href="${CAPROVER_DASHBOARD}/#/apps/details/${name}" target="_blank" class="manage-app-link" title="Open in CapRover">🔗 CapRover</a>
+                </div>
+            `;
+        });
+        html += '</div>';
+        allContainer.innerHTML = html;
+    }
+
+    // Toggle the "Force Build All Pinned" button
+    const allBtn = document.getElementById('forceBuildAllBtn');
+    if (allBtn) {
+        allBtn.disabled = rebootBuilding || pinnedApps.size === 0;
+    }
+}
+
+async function togglePin(appName) {
+    if (rebootBuilding) return;
+    const isPinned = pinnedApps.has(appName);
+
+    try {
+        let response;
+        if (isPinned) {
+            response = await fetch(`/api/pinned-apps/${encodeURIComponent(appName)}`, {
+                method: 'DELETE',
+                credentials: 'include'
+            });
+        } else {
+            response = await fetch('/api/pinned-apps', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ appName })
+            });
+        }
+
+        if (response.status === 401) {
+            showLogin();
+            return;
+        }
+
+        const data = await response.json();
+        if (!data.success) {
+            throw new Error(data.error || 'Failed to update pin');
+        }
+
+        if (isPinned) {
+            pinnedApps.delete(appName);
+            showToast(`Unpinned "${appName}"`, 'info');
+        } else {
+            pinnedApps.add(appName);
+            showToast(`Pinned "${appName}"`, 'success');
+        }
+
+        renderRebootLists();
+    } catch (error) {
+        showErrorModal('Pin Failed', error.message || 'Failed to update pin. Please try again.');
+    }
+}
+
+// ── Console helpers ──
+
+function rebootLog(message, type = 'info') {
+    const consoleEl = document.getElementById('rebootConsole');
+    if (!consoleEl) return;
+    const line = document.createElement('div');
+    line.className = `rc-line rc-${type}`;
+    const time = new Date().toLocaleTimeString();
+    line.textContent = `[${time}] ${message}`;
+    consoleEl.appendChild(line);
+    consoleEl.scrollTop = consoleEl.scrollHeight;
+}
+
+function clearRebootConsole() {
+    const consoleEl = document.getElementById('rebootConsole');
+    if (consoleEl) consoleEl.innerHTML = '';
+}
+
+// Force build a single app and stream its build logs to the console.
+async function forceBuildApp(appName) {
+    rebootLog(`▶ Triggering force build for ${appName}...`, 'cmd');
+
+    try {
+        const response = await fetch(`/api/apps/${encodeURIComponent(appName)}/force-build`, {
+            method: 'POST',
+            credentials: 'include'
+        });
+
+        if (response.status === 401) {
+            showLogin();
+            throw new Error('Session expired. Please login again.');
+        }
+
+        const data = await response.json();
+        if (!data.success) {
+            throw new Error(data.error || 'Failed to trigger build');
+        }
+
+        rebootLog(`✓ Build triggered for ${appName}. Streaming logs...`, 'success');
+        await pollBuildLogs(appName);
+    } catch (error) {
+        rebootLog(`✗ ${appName}: ${error.message}`, 'error');
+    }
+}
+
+// Poll CapRover build logs and stream new lines until the build finishes.
+async function pollBuildLogs(appName) {
+    const maxAttempts = 120; // ~5 minutes at 2.5s intervals
+    let printedCount = 0;
+    let sawBuilding = false;
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        await sleep(2500);
+
+        let data;
+        try {
+            const response = await fetch(`/api/apps/${encodeURIComponent(appName)}/build-logs`, {
+                credentials: 'include'
+            });
+            if (response.status === 401) {
+                showLogin();
+                rebootLog(`✗ ${appName}: session expired`, 'error');
+                return;
+            }
+            data = await response.json();
+        } catch (error) {
+            // Transient error (e.g. app briefly unreachable right after reboot) - keep trying
+            rebootLog(`… ${appName}: waiting (${error.message})`, 'dim');
+            continue;
+        }
+
+        if (!data.success) {
+            rebootLog(`✗ ${appName}: ${data.error || 'failed to read build logs'}`, 'error');
+            return;
+        }
+
+        // Print only the new log lines since last poll
+        const lines = (data.logs && Array.isArray(data.logs.lines)) ? data.logs.lines : [];
+        if (lines.length < printedCount) {
+            // Log buffer rotated/reset - reprint from the start
+            printedCount = 0;
+        }
+        for (let i = printedCount; i < lines.length; i++) {
+            const text = String(lines[i]).replace(/\s+$/, '');
+            if (text) rebootLog(`  ${text}`, 'dim');
+        }
+        printedCount = lines.length;
+
+        if (data.isAppBuilding) {
+            sawBuilding = true;
+        } else if (sawBuilding || attempt > 3) {
+            // Build finished (or never started because there was nothing to build)
+            if (data.isBuildFailed) {
+                rebootLog(`✗ Build failed for ${appName}`, 'error');
+            } else {
+                rebootLog(`✔ Build complete for ${appName}`, 'success');
+            }
+            return;
+        }
+    }
+
+    rebootLog(`⏱ Timed out waiting for ${appName} build to finish (still building?)`, 'error');
+}
+
+// Force build every pinned service, one at a time (sequential).
+async function forceBuildAllPinned() {
+    if (rebootBuilding) return;
+
+    const targets = [...rebootApps]
+        .map(a => a.appName)
+        .filter(name => pinnedApps.has(name))
+        .sort((a, b) => a.localeCompare(b));
+
+    if (targets.length === 0) {
+        showToast('No pinned services to build', 'info');
+        return;
+    }
+
+    rebootBuilding = true;
+    renderRebootLists(); // disables buttons
+
+    rebootLog(`═══ Force-building ${targets.length} pinned service(s) ═══`, 'info');
+
+    let succeeded = 0;
+    for (const appName of targets) {
+        await forceBuildApp(appName);
+        succeeded++;
+    }
+
+    rebootLog(`═══ Done. Processed ${succeeded}/${targets.length} service(s) ═══`, 'info');
+
+    rebootBuilding = false;
+    renderRebootLists(); // re-enables buttons
+    showToast('Force build run complete', 'success');
 }

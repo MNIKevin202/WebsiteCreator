@@ -82,6 +82,9 @@
                     <button onclick="showPage('images')" id="nav-images" class="nav-btn">
                         Image Management
                     </button>
+                    <button onclick="showPage('reboot')" id="nav-reboot" class="nav-btn">
+                        Reboot VPS
+                    </button>
                 </nav>
 
                 <!-- Create Website Page -->
@@ -381,6 +384,58 @@
                     </div>
                     <div id="imagesError" class="error-card" style="display: none;">
                         <div id="imagesErrorContent"></div>
+                    </div>
+                </div>
+
+                <!-- Reboot VPS Recovery Page -->
+                <div id="page-reboot" class="page-content" style="display: none;">
+                    <h2>Reboot VPS — Recovery</h2>
+                    <p style="color: var(--text-secondary); margin-bottom: 24px;">
+                        This does <strong>not</strong> reboot your VPS. After a reboot, force-build your pinned
+                        services from GitHub to bring them back online. Watch the console below to see what's happening.
+                    </p>
+
+                    <div class="form-card reboot-toolbar">
+                        <button id="forceBuildAllBtn" onclick="forceBuildAllPinned()" class="btn-primary" style="width: auto;">
+                            ⚡ Force Build All Pinned
+                        </button>
+                        <button onclick="loadReboot()" class="btn-secondary" style="width: auto;">
+                            🔄 Refresh
+                        </button>
+                        <span id="rebootStatus" class="reboot-status"></span>
+                    </div>
+
+                    <div id="rebootLoading" class="form-card" style="text-align: center; padding: 40px;">
+                        <p>Loading services...</p>
+                    </div>
+
+                    <div id="rebootError" class="error-card" style="display: none;">
+                        <div id="rebootErrorContent"></div>
+                    </div>
+
+                    <div id="rebootMain" style="display: none;">
+                        <div class="form-card">
+                            <h3 style="margin-bottom: 12px;">📌 Pinned services</h3>
+                            <div id="pinnedServicesList"></div>
+                        </div>
+
+                        <div class="form-card">
+                            <h3 style="margin-bottom: 12px;">All services</h3>
+                            <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 16px;">
+                                Click the star to pin a service so it's included in "Force Build All Pinned".
+                            </p>
+                            <div id="allServicesList"></div>
+                        </div>
+
+                        <div class="reboot-console-wrap form-card">
+                            <div class="reboot-console-header">
+                                <span>Console</span>
+                                <button onclick="clearRebootConsole()" class="btn-secondary" style="width: auto; padding: 6px 12px; font-size: 0.85rem;">
+                                    Clear
+                                </button>
+                            </div>
+                            <div id="rebootConsole" class="reboot-console"></div>
+                        </div>
                     </div>
                 </div>
             </div>

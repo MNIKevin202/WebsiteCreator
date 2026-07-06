@@ -414,6 +414,54 @@ async function caproverSetGitHubDeployment(baseUrl, token, appName, repoUrl, bra
   return result;
 }
 
+// Get the full raw app definition for a single app (includes appPushWebhookToken, repoInfo, etc.)
+async function caproverGetAppDefinition(baseUrl, token, appName) {
+  const result = await caproverRequest({
+    baseUrl,
+    token,
+    path: '/api/v2/user/apps/appDefinitions',
+    method: 'GET',
+  });
+
+  const apps = result?.data?.appDefinitions || [];
+  const app = apps.find(a => a.appName === appName);
+  return app || null;
+}
+
+// Force a build/deploy from the app's configured git repo (the CapRover "Force Build" action).
+// Uses the per-app push webhook token with an empty POST to the triggerbuild webhook.
+async function caproverForceBuild(baseUrl, token, appName) {
+  const app = await caproverGetAppDefinition(baseUrl, token, appName);
+  if (!app) {
+    throw new Error(`App "${appName}" not found on CapRover`);
+  }
+
+  // Primary field name across CapRover versions is appPushWebhookToken.
+  // Fall back to scanning for any key containing "webhook" to tolerate version differences.
+  let webhookToken = app.appPushWebhookToken;
+  if (!webhookToken) {
+    const webhookKey = Object.keys(app).find(k => /webhook/i.test(k) && typeof app[k] === 'string' && app[k]);
+    if (webhookKey) webhookToken = app[webhookKey];
+  }
+
+  if (!webhookToken) {
+    throw new Error(`No webhook token for "${appName}". Configure GitHub deployment for this app first (Deployment tab → repo/branch/credentials), then try again.`);
+  }
+
+  // The triggerbuild webhook authorizes via the ?token= query param and needs NO x-captain-auth
+  // header and NO body (an empty POST = "no branch detected" = unconditional rebuild).
+  const path = `/api/v2/user/apps/webhooks/triggerbuild?namespace=captain&token=${encodeURIComponent(webhookToken)}`;
+  await caproverRequest({
+    baseUrl,
+    token: null,
+    path,
+    method: 'POST',
+  });
+
+  console.log('[CAPROVER] force build triggered for app:', appName);
+  return { ok: true };
+}
+
 // Get app data including versions/images
 async function caproverGetAppData(baseUrl, token, appName) {
   const result = await caproverRequest({
@@ -632,6 +680,8 @@ module.exports = {
   caproverSetCustomDomains,
   caproverListApps,
   caproverDeleteApp,
+  caproverGetAppDefinition,
+  caproverForceBuild,
   caproverGetAppData,
   caproverGetImageCount,
   caproverDeleteOldImages,

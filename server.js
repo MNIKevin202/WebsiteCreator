@@ -15,6 +15,7 @@ const {
   caproverSetCustomDomains,
   caproverListApps,
   caproverDeleteApp,
+  caproverForceBuild,
   caproverGetAppData,
   caproverGetImageCount,
   caproverDeleteOldImages,
@@ -117,6 +118,21 @@ const adminSchema = new mongoose.Schema({
 });
 
 const Admin = mongoose.model('adminLogin', adminSchema, 'adminLogin');
+
+// Pinned service schema - stores the CapRover apps the user pins for post-reboot force builds
+const pinnedServiceSchema = new mongoose.Schema({
+  appName: {
+    type: String,
+    required: true,
+    unique: true
+  },
+  createdAt: {
+    type: Date,
+    default: Date.now
+  }
+});
+
+const PinnedService = mongoose.model('pinnedService', pinnedServiceSchema, 'pinnedServices');
 
 // Authentication middleware
 function requireAuth(req, res, next) {
@@ -2011,6 +2027,103 @@ app.delete('/api/apps/:appName', requireAuth, async (req, res) => {
       success: false, 
       error: error.message || 'Failed to delete CapRover app' 
     });
+  }
+});
+
+// ─── Reboot VPS recovery: pinned services + force build ──────────────────────
+
+// List pinned services (protected)
+app.get('/api/pinned-apps', requireAuth, async (req, res) => {
+  try {
+    if (!MONGO_URI) {
+      return res.status(500).json({ success: false, error: 'MongoDB not configured' });
+    }
+    const pins = await PinnedService.find().sort({ createdAt: 1 });
+    res.json({ success: true, pinned: pins.map(p => p.appName) });
+  } catch (error) {
+    console.error(`[${new Date().toISOString()}] Error listing pinned apps:`, error);
+    res.status(500).json({ success: false, error: error.message || 'Failed to list pinned apps' });
+  }
+});
+
+// Pin a service (protected)
+app.post('/api/pinned-apps', requireAuth, async (req, res) => {
+  try {
+    if (!MONGO_URI) {
+      return res.status(500).json({ success: false, error: 'MongoDB not configured' });
+    }
+    const appName = String(req.body?.appName || '').trim();
+    if (!appName || !/^[a-z0-9-]+$/i.test(appName)) {
+      return res.status(400).json({ success: false, error: 'Invalid app name' });
+    }
+    await PinnedService.updateOne({ appName }, { $set: { appName } }, { upsert: true });
+    res.json({ success: true, message: `Pinned "${appName}"` });
+  } catch (error) {
+    console.error(`[${new Date().toISOString()}] Error pinning app:`, error);
+    res.status(500).json({ success: false, error: error.message || 'Failed to pin app' });
+  }
+});
+
+// Unpin a service (protected)
+app.delete('/api/pinned-apps/:appName', requireAuth, async (req, res) => {
+  try {
+    if (!MONGO_URI) {
+      return res.status(500).json({ success: false, error: 'MongoDB not configured' });
+    }
+    const { appName } = req.params;
+    await PinnedService.deleteOne({ appName });
+    res.json({ success: true, message: `Unpinned "${appName}"` });
+  } catch (error) {
+    console.error(`[${new Date().toISOString()}] Error unpinning app:`, error);
+    res.status(500).json({ success: false, error: error.message || 'Failed to unpin app' });
+  }
+});
+
+// Force build an app from its configured GitHub repo (protected)
+app.post('/api/apps/:appName/force-build', requireAuth, async (req, res) => {
+  const requestId = Date.now();
+  const { appName } = req.params;
+  console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] POST /api/apps/${appName}/force-build`);
+
+  try {
+    if (!CAPROVER_URL || !CAPROVER_PASSWORD) {
+      return res.status(400).json({ success: false, error: 'CapRover credentials not configured' });
+    }
+
+    const baseUrl = CAPROVER_URL.replace(/\/+$/, '');
+    const token = await caproverLogin(baseUrl, CAPROVER_PASSWORD);
+    await caproverForceBuild(baseUrl, token, appName);
+
+    res.json({ success: true, message: `Force build triggered for "${appName}"` });
+  } catch (error) {
+    console.error(`[${new Date().toISOString()}] [REQUEST ${requestId}] Error force building:`, error);
+    res.status(500).json({ success: false, error: error.message || 'Failed to force build' });
+  }
+});
+
+// Get current build status/logs for an app (protected)
+// Note: re-authenticates to CapRover on each call, consistent with the other routes.
+app.get('/api/apps/:appName/build-logs', requireAuth, async (req, res) => {
+  const { appName } = req.params;
+
+  try {
+    if (!CAPROVER_URL || !CAPROVER_PASSWORD) {
+      return res.status(400).json({ success: false, error: 'CapRover credentials not configured' });
+    }
+
+    const baseUrl = CAPROVER_URL.replace(/\/+$/, '');
+    const token = await caproverLogin(baseUrl, CAPROVER_PASSWORD);
+    const appData = await caproverGetAppData(baseUrl, token, appName);
+
+    res.json({
+      success: true,
+      isAppBuilding: !!appData?.isAppBuilding,
+      isBuildFailed: !!appData?.isBuildFailed,
+      logs: appData?.logs || { lines: [], firstLineNumber: 0 }
+    });
+  } catch (error) {
+    console.error(`[${new Date().toISOString()}] Error getting build logs for ${appName}:`, error);
+    res.status(500).json({ success: false, error: error.message || 'Failed to get build logs' });
   }
 });
 
