@@ -667,6 +667,122 @@ async function caproverDeleteOldImages(baseUrl, token, appName, keepCount = 5) {
   }
 }
 
+// ─── App logs, restart, system info (ops dashboard) ──────────────────────────
+
+// Strip Docker's multiplexed stream framing + ANSI codes so logs render cleanly.
+function cleanDockerLogs(raw) {
+  const s = String(raw || '').replace(/\x1b\[[0-9;]*[A-Za-z]/g, '');
+  let out = '';
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    // keep tab (9), newline (10), carriage return (13), and any printable char (>= 32)
+    if (c === 9 || c === 10 || c === 13 || c >= 32) out += s[i];
+  }
+  return out.replace(/\r\n?/g, '\n');
+}
+
+// Get an app's recent runtime (container) logs
+async function caproverGetAppLogs(baseUrl, token, appName, encoding = 'utf8') {
+  const result = await caproverRequest({
+    baseUrl,
+    token,
+    path: `/api/v2/user/apps/appData/${appName}/logs?encoding=${encodeURIComponent(encoding)}`,
+    method: 'GET',
+  });
+  const raw = result?.data?.logs ?? result?.logs ?? '';
+  return cleanDockerLogs(raw);
+}
+
+// Build a full app-definition update payload, preserving existing fields and applying overrides.
+function buildAppUpdatePayload(app, overrides = {}) {
+  const payload = {
+    appName: app.appName,
+    instanceCount: app.instanceCount || 1,
+    captainDefinitionRelativeFilePath: app.captainDefinitionRelativeFilePath || './captain-definition',
+    notExposeAsWebApp: app.notExposeAsWebApp || false,
+    hasPersistentData: app.hasPersistentData || false,
+    description: app.description || '',
+    volumes: app.volumes || [],
+    ports: app.ports || [],
+    preDeployFunction: app.preDeployFunction || '',
+    customNginxConfig: app.customNginxConfig || '',
+    customDomain: app.customDomain || [],
+    forceSsl: app.forceSsl || false,
+    websocketSupport: app.websocketSupport || false,
+    containerHttpPort: app.containerHttpPort || undefined,
+    appDeployTokenConfig: app.appDeployTokenConfig || { enabled: false, appDeployToken: '' },
+    repoInfo: (app.appPushWebhook && app.appPushWebhook.repoInfo) || app.repoInfo || undefined,
+    ...overrides,
+  };
+  Object.keys(payload).forEach(k => { if (payload[k] === undefined) delete payload[k]; });
+  return payload;
+}
+
+async function caproverUpdateApp(baseUrl, token, appName, overrides) {
+  const app = await caproverGetAppDefinition(baseUrl, token, appName);
+  if (!app) throw new Error(`App "${appName}" not found on CapRover`);
+
+  const result = await caproverRequest({
+    baseUrl, token,
+    path: '/api/v2/user/apps/appDefinitions/update',
+    method: 'POST',
+    body: buildAppUpdatePayload(app, overrides),
+  });
+
+  if (result && typeof result === 'object' && result.status !== undefined && result.status >= 1000) {
+    const msg = result.description || result.message || `status ${result.status}`;
+    throw new Error(`CapRover update failed for "${appName}": ${msg}`);
+  }
+  return { ok: true, previousInstanceCount: app.instanceCount || 1 };
+}
+
+// Restart an app by scaling instances to 0 then back (forces container recreation).
+async function caproverRestartApp(baseUrl, token, appName) {
+  const app = await caproverGetAppDefinition(baseUrl, token, appName);
+  if (!app) throw new Error(`App "${appName}" not found on CapRover`);
+  const original = app.instanceCount && app.instanceCount > 0 ? app.instanceCount : 1;
+
+  console.log(`[CAPROVER] restarting "${appName}" (scale ${original} -> 0 -> ${original})`);
+  await caproverUpdateApp(baseUrl, token, appName, { instanceCount: 0 });
+  await new Promise(r => setTimeout(r, 3000));
+  await caproverUpdateApp(baseUrl, token, appName, { instanceCount: original });
+  return { ok: true, instanceCount: original };
+}
+
+// System / VPS overview helpers
+async function caproverGetSystemInfo(baseUrl, token) {
+  const result = await caproverRequest({ baseUrl, token, path: '/api/v2/user/system/info/', method: 'GET' });
+  return result?.data || {};
+}
+
+async function caproverGetNodes(baseUrl, token) {
+  const result = await caproverRequest({ baseUrl, token, path: '/api/v2/user/system/nodes/', method: 'GET' });
+  return result?.data?.nodes || [];
+}
+
+async function caproverGetVersionInfo(baseUrl, token) {
+  const result = await caproverRequest({ baseUrl, token, path: '/api/v2/user/system/versionInfo/', method: 'GET' });
+  return result?.data || {};
+}
+
+async function caproverGetLoadBalancerInfo(baseUrl, token) {
+  const result = await caproverRequest({ baseUrl, token, path: '/api/v2/user/system/loadbalancerinfo/', method: 'GET' });
+  return result?.data || {};
+}
+
+// Full app definitions plus the root domain (needed to build each app's public URL)
+async function caproverGetAppsAndRoot(baseUrl, token) {
+  const result = await caproverRequest({
+    baseUrl, token,
+    path: '/api/v2/user/apps/appDefinitions',
+    method: 'GET',
+  });
+  return {
+    apps: result?.data?.appDefinitions || [],
+    rootDomain: result?.data?.rootDomain || '',
+  };
+}
+
 module.exports = {
   caproverLogin,
   caproverEnsureApp,
@@ -682,4 +798,13 @@ module.exports = {
   caproverGetAppData,
   caproverGetImageCount,
   caproverDeleteOldImages,
+  caproverGetAppLogs,
+  caproverUpdateApp,
+  caproverRestartApp,
+  caproverGetSystemInfo,
+  caproverGetNodes,
+  caproverGetVersionInfo,
+  caproverGetLoadBalancerInfo,
+  caproverGetAppsAndRoot,
 };
+

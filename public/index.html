@@ -85,6 +85,12 @@
                     <button onclick="showPage('reboot')" id="nav-reboot" class="nav-btn">
                         Reboot VPS
                     </button>
+                    <button onclick="showPage('system')" id="nav-system" class="nav-btn">
+                        System
+                    </button>
+                    <button onclick="showPage('logs')" id="nav-logs" class="nav-btn">
+                        Logs
+                    </button>
                 </nav>
 
                 <!-- Create Website Page -->
@@ -427,6 +433,59 @@
                             </p>
                             <div id="allServicesList"></div>
                         </div>
+                    </div>
+                </div>
+
+                <!-- System / VPS Overview Page -->
+                <div id="page-system" class="page-content" style="display: none;">
+                    <h2>System</h2>
+                    <p style="color: var(--text-secondary); margin-bottom: 24px;">
+                        Overview of your CapRover node and a live health check of every web service.
+                    </p>
+
+                    <div class="form-card reboot-toolbar">
+                        <button onclick="loadSystem()" class="btn-secondary" style="width: auto;">🔄 Refresh</button>
+                        <button onclick="loadHealthGrid()" class="btn-secondary" style="width: auto;">🩺 Re-check health</button>
+                        <span id="systemStatus" class="reboot-status"></span>
+                    </div>
+
+                    <div id="systemLoading" class="form-card" style="text-align: center; padding: 40px;">
+                        <p>Loading system info...</p>
+                    </div>
+                    <div id="systemError" class="error-card" style="display: none;">
+                        <div id="systemErrorContent"></div>
+                    </div>
+
+                    <div id="systemOverview" style="display: none;"></div>
+
+                    <div class="form-card">
+                        <h3 style="margin-bottom: 12px;">🩺 Service health</h3>
+                        <div id="healthGrid"><p style="color: var(--text-secondary);">Loading health…</p></div>
+                    </div>
+                </div>
+
+                <!-- App Logs Page -->
+                <div id="page-logs" class="page-content" style="display: none;">
+                    <h2>Logs</h2>
+                    <p style="color: var(--text-secondary); margin-bottom: 24px;">
+                        View the recent runtime logs for any service.
+                    </p>
+
+                    <div class="form-card reboot-toolbar">
+                        <select id="logsAppSelect" class="logs-select"></select>
+                        <button onclick="loadAppLogs()" class="btn-primary" style="width: auto;">📄 Load logs</button>
+                        <label class="logs-autorefresh">
+                            <input type="checkbox" id="logsAutoRefresh" onchange="toggleLogsAutoRefresh()"> Auto-refresh (5s)
+                        </label>
+                        <span id="logsStatus" class="reboot-status"></span>
+                    </div>
+
+                    <div class="reboot-console-wrap form-card reboot-inline-console" style="margin-top: 16px;">
+                        <div class="reboot-console-header">
+                            <span id="logsHeader">Runtime logs</span>
+                            <button onclick="clearAppLogs()" class="btn-secondary" style="width: auto; padding: 6px 12px; font-size: 0.85rem;">Clear</button>
+                        </div>
+                        <div id="appLogsConsole" class="reboot-console" style="height: 460px;"></div>
                     </div>
                 </div>
             </div>

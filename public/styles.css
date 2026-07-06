@@ -1195,3 +1195,85 @@ footer {
 .rc-success { color: #3fb950; }
 .rc-error { color: #f85149; }
 .rc-dim { color: #8b949e; }
+
+/* ─── System overview + health + logs ───────────────────────────────────── */
+
+.sys-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 12px;
+}
+
+.sys-card {
+    background: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 16px;
+}
+
+.sys-card-label {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.sys-card-value {
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+
+.sys-card-sub {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-top: 2px;
+}
+
+.sys-badge {
+    display: inline-block;
+    font-size: 0.75rem;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-weight: 600;
+}
+
+.sys-badge-ok { background: rgba(16, 185, 129, 0.15); color: var(--success-color); }
+.sys-badge-warn { background: rgba(245, 158, 11, 0.15); color: var(--warning-color); }
+
+/* Health status dot */
+.status-dot {
+    flex: 0 0 auto;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.status-dot.up { background: var(--success-color); box-shadow: 0 0 8px rgba(16, 185, 129, 0.6); }
+.status-dot.down { background: var(--error-color); box-shadow: 0 0 8px rgba(239, 68, 68, 0.6); }
+
+/* Logs page controls */
+.logs-select {
+    padding: 10px 12px;
+    border: 2px solid var(--border-color);
+    border-radius: 8px;
+    background: var(--bg-color);
+    color: var(--text-primary);
+    font-size: 0.95rem;
+    min-width: 220px;
+}
+
+.logs-autorefresh {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    cursor: pointer;
+}

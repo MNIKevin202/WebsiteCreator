@@ -53,6 +53,13 @@ function showPage(pageName) {
         clearInterval(refreshInterval);
         refreshInterval = null;
     }
+    // Stop the logs auto-refresh when navigating away from the Logs page
+    if (logsInterval && pageName !== 'logs') {
+        clearInterval(logsInterval);
+        logsInterval = null;
+        const cb = document.getElementById('logsAutoRefresh');
+        if (cb) cb.checked = false;
+    }
     
     // Hide all pages
     document.querySelectorAll('.page-content').forEach(page => {
@@ -95,6 +102,10 @@ function showPage(pageName) {
     } else if (pageName === 'reboot') {
         // No auto-refresh: it would clobber the console while builds are streaming
         loadReboot();
+    } else if (pageName === 'system') {
+        loadSystem();
+    } else if (pageName === 'logs') {
+        initLogsPage();
     }
 }
 
@@ -2945,6 +2956,9 @@ function renderRebootLists() {
                             <button onclick="forceBuildSingle('${name}')" class="btn-primary reboot-build-btn" style="width: auto; padding: 8px 16px; font-size: 0.9rem;" ${rebootBuilding ? 'disabled' : ''}>
                                 Force Build
                             </button>
+                            <button onclick="restartApp('${name}')" class="btn-secondary reboot-restart-btn" style="width: auto; padding: 8px 16px; font-size: 0.9rem;" ${rebootBuilding ? 'disabled' : ''}>
+                                Restart
+                            </button>
                             <button onclick="togglePin('${name}')" class="btn-secondary reboot-unpin-btn" style="width: auto; padding: 8px 16px; font-size: 0.9rem;" ${rebootBuilding ? 'disabled' : ''}>
                                 Unpin
                             </button>
@@ -3067,7 +3081,7 @@ function setRebootBusy(busy) {
     rebootBuilding = busy;
     const page = document.getElementById('page-reboot');
     if (page) {
-        page.querySelectorAll('.reboot-build-btn, .reboot-unpin-btn, .pin-toggle').forEach(b => {
+        page.querySelectorAll('.reboot-build-btn, .reboot-unpin-btn, .reboot-restart-btn, .pin-toggle').forEach(b => {
             b.disabled = busy;
         });
     }
@@ -3215,4 +3229,254 @@ async function forceBuildAllPinned() {
     }
 
     showToast(`Force build run complete (${targets.length} service(s))`, 'success');
+}
+
+// ─── System / VPS overview + service health ──────────────────────────────────
+
+let logsInterval = null;
+
+function formatBytes(bytes) {
+    if (!bytes || bytes <= 0) return 'N/A';
+    const gb = bytes / (1024 * 1024 * 1024);
+    if (gb >= 1) return `${gb.toFixed(1)} GB`;
+    const mb = bytes / (1024 * 1024);
+    return `${mb.toFixed(0)} MB`;
+}
+
+async function loadSystem() {
+    const loading = document.getElementById('systemLoading');
+    const overview = document.getElementById('systemOverview');
+    const errorCard = document.getElementById('systemError');
+    const errorContent = document.getElementById('systemErrorContent');
+
+    loading.style.display = 'block';
+    overview.style.display = 'none';
+    errorCard.style.display = 'none';
+
+    try {
+        const response = await fetch('/api/system/overview', { credentials: 'include' });
+        if (response.status === 401) { showLogin(); return; }
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Failed to load system overview');
+
+        renderSystemOverview(data);
+        loading.style.display = 'none';
+        overview.style.display = 'block';
+    } catch (error) {
+        console.error('[loadSystem] Error:', error);
+        loading.style.display = 'none';
+        errorContent.textContent = error.message || 'Failed to load system info';
+        errorCard.style.display = 'block';
+    }
+
+    // Kick off the health grid alongside the overview
+    loadHealthGrid();
+}
+
+function renderSystemOverview(data) {
+    const overview = document.getElementById('systemOverview');
+    const v = data.version || {};
+    const lb = data.loadBalancer || {};
+    const nodes = data.nodes || [];
+
+    let cards = '<div class="sys-grid">';
+
+    // CapRover version
+    const updateBadge = v.canUpdate
+        ? `<span class="sys-badge sys-badge-warn">update available → ${escapeHtml(String(v.latestVersion || ''))}</span>`
+        : `<span class="sys-badge sys-badge-ok">up to date</span>`;
+    cards += `
+        <div class="sys-card">
+            <div class="sys-card-label">CapRover</div>
+            <div class="sys-card-value">v${escapeHtml(String(v.currentVersion || '?'))}</div>
+            <div>${v.currentVersion ? updateBadge : ''}</div>
+        </div>`;
+
+    // App / instance counts
+    cards += `
+        <div class="sys-card">
+            <div class="sys-card-label">Services</div>
+            <div class="sys-card-value">${data.appCount != null ? data.appCount : '?'}</div>
+            <div class="sys-card-sub">${data.totalInstances != null ? data.totalInstances : '?'} running instance(s)</div>
+        </div>`;
+
+    // Load balancer / live traffic
+    if (lb && (lb.activeConnections != null || lb.handled != null)) {
+        cards += `
+            <div class="sys-card">
+                <div class="sys-card-label">Nginx (live)</div>
+                <div class="sys-card-value">${lb.activeConnections != null ? lb.activeConnections : '?'}</div>
+                <div class="sys-card-sub">active conns · ${lb.handled != null ? lb.handled : '?'} handled</div>
+            </div>`;
+    }
+
+    cards += '</div>';
+
+    // Nodes
+    if (nodes.length) {
+        cards += '<h3 style="margin: 20px 0 12px;">Nodes</h3><div class="sys-grid">';
+        nodes.forEach(n => {
+            const cores = n.nanoCpu ? (n.nanoCpu / 1e9).toFixed(0) : '?';
+            const up = String(n.state).toLowerCase() === 'ready';
+            cards += `
+                <div class="sys-card">
+                    <div class="sys-card-label">
+                        <span class="status-dot ${up ? 'up' : 'down'}"></span>
+                        ${escapeHtml(String(n.hostname || n.nodeId || 'node'))}${n.isLeader ? ' 👑' : ''}
+                    </div>
+                    <div class="sys-card-sub">State: ${escapeHtml(String(n.state || '?'))}</div>
+                    <div class="sys-card-sub">CPU: ${cores} core(s) · RAM: ${formatBytes(n.memoryBytes)}</div>
+                    <div class="sys-card-sub">Docker ${escapeHtml(String(n.dockerEngineVersion || '?'))} · ${escapeHtml(String(n.ip || ''))}</div>
+                </div>`;
+        });
+        cards += '</div>';
+    }
+
+    overview.innerHTML = cards;
+}
+
+async function loadHealthGrid() {
+    const grid = document.getElementById('healthGrid');
+    grid.innerHTML = '<p style="color: var(--text-secondary);">Pinging services…</p>';
+    document.getElementById('systemStatus').textContent = 'checking health…';
+
+    try {
+        const response = await fetch('/api/health-check', { credentials: 'include' });
+        if (response.status === 401) { showLogin(); return; }
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Health check failed');
+
+        const results = data.results || [];
+        if (results.length === 0) {
+            grid.innerHTML = '<div class="empty-state"><p>No web-exposed services found.</p></div>';
+            document.getElementById('systemStatus').textContent = '';
+            return;
+        }
+
+        const downCount = results.filter(r => !r.up).length;
+        document.getElementById('systemStatus').textContent =
+            downCount === 0 ? `all ${results.length} up` : `${downCount} of ${results.length} down`;
+
+        let html = '<div style="display: grid; gap: 8px;">';
+        results.forEach(r => {
+            const name = escapeHtml(r.appName);
+            const statusText = r.status != null ? `HTTP ${r.status}` : (r.error ? escapeHtml(String(r.error)) : 'no response');
+            const latency = r.ms != null ? `${r.ms} ms` : '';
+            html += `
+                <div class="manage-item-single reboot-item" data-app-name="${name}">
+                    <span class="status-dot ${r.up ? 'up' : 'down'}"></span>
+                    <div style="flex: 1;">
+                        <div style="font-weight: 600; color: var(--text-primary);">${name}</div>
+                        <div style="font-size: 0.85rem; color: var(--text-secondary);">
+                            ${r.up ? '🟢 Up' : '🔴 Down'} · ${statusText} ${latency ? '· ' + latency : ''}
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        ${r.url ? `<a href="${escapeHtml(r.url)}" target="_blank" class="manage-app-link" title="Open">🔗 Open</a>` : ''}
+                        <button onclick="restartApp('${name}')" class="btn-secondary reboot-restart-btn" style="width: auto; padding: 8px 16px; font-size: 0.9rem;">
+                            Restart
+                        </button>
+                    </div>
+                </div>`;
+        });
+        html += '</div>';
+        grid.innerHTML = html;
+    } catch (error) {
+        console.error('[loadHealthGrid] Error:', error);
+        grid.innerHTML = `<div class="error-card" style="display:block;">${escapeHtml(error.message || 'Health check failed')}</div>`;
+        document.getElementById('systemStatus').textContent = '';
+    }
+}
+
+function restartApp(appName) {
+    showConfirmModal(
+        'Restart Service',
+        `Restart "${appName}"? This scales it to 0 and back, so expect a few seconds of downtime.`,
+        async () => {
+            try {
+                showToast(`Restarting "${appName}"…`, 'info');
+                const response = await fetch(`/api/apps/${encodeURIComponent(appName)}/restart`, {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+                if (response.status === 401) { showLogin(); throw new Error('Session expired. Please login again.'); }
+                const data = await response.json();
+                if (!data.success) throw new Error(data.error || 'Failed to restart');
+                showToast(`Restarted "${appName}"`, 'success');
+                // Re-check health after a moment to reflect the restart
+                setTimeout(() => { if (currentPage === 'system') loadHealthGrid(); }, 4000);
+            } catch (error) {
+                showErrorModal('Restart Failed', error.message || 'Failed to restart the service.');
+            }
+        },
+        'Restart',
+        'danger'
+    );
+}
+
+// ─── App runtime logs viewer ─────────────────────────────────────────────────
+
+async function initLogsPage() {
+    const select = document.getElementById('logsAppSelect');
+    // Only (re)load the app list if empty, so we keep the current selection
+    if (select.options.length > 0) return;
+
+    try {
+        const response = await fetch('/api/apps', { credentials: 'include' });
+        if (response.status === 401) { showLogin(); return; }
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Failed to load apps');
+
+        const apps = (data.apps || []).slice().sort((a, b) => a.appName.localeCompare(b.appName));
+        select.innerHTML = apps.map(a =>
+            `<option value="${escapeHtml(a.appName)}">${escapeHtml(a.appName)}</option>`
+        ).join('');
+    } catch (error) {
+        console.error('[initLogsPage] Error:', error);
+        select.innerHTML = '';
+        showToast(error.message || 'Failed to load apps', 'error');
+    }
+}
+
+async function loadAppLogs() {
+    const select = document.getElementById('logsAppSelect');
+    const appName = select.value;
+    if (!appName) { showToast('Select a service first', 'info'); return; }
+
+    const consoleEl = document.getElementById('appLogsConsole');
+    document.getElementById('logsHeader').textContent = `Runtime logs — ${appName}`;
+    document.getElementById('logsStatus').textContent = 'loading…';
+
+    try {
+        const response = await fetch(`/api/apps/${encodeURIComponent(appName)}/logs`, { credentials: 'include' });
+        if (response.status === 401) { showLogin(); return; }
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Failed to load logs');
+
+        const text = (data.logs || '').trim();
+        // Preserve scroll-at-bottom behaviour
+        consoleEl.textContent = text || '(no logs returned)';
+        consoleEl.scrollTop = consoleEl.scrollHeight;
+        document.getElementById('logsStatus').textContent = `updated ${new Date().toLocaleTimeString()}`;
+    } catch (error) {
+        console.error('[loadAppLogs] Error:', error);
+        document.getElementById('logsStatus').textContent = '';
+        showErrorModal('Logs Failed', error.message || 'Failed to load logs.');
+    }
+}
+
+function clearAppLogs() {
+    document.getElementById('appLogsConsole').textContent = '';
+}
+
+function toggleLogsAutoRefresh() {
+    const cb = document.getElementById('logsAutoRefresh');
+    if (logsInterval) { clearInterval(logsInterval); logsInterval = null; }
+    if (cb.checked) {
+        loadAppLogs();
+        logsInterval = setInterval(() => {
+            if (currentPage === 'logs') loadAppLogs();
+            else { clearInterval(logsInterval); logsInterval = null; }
+        }, 5000);
+    }
 }

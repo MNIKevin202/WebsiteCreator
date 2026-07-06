@@ -19,6 +19,13 @@ const {
   caproverGetAppData,
   caproverGetImageCount,
   caproverDeleteOldImages,
+  caproverGetAppLogs,
+  caproverRestartApp,
+  caproverGetSystemInfo,
+  caproverGetNodes,
+  caproverGetVersionInfo,
+  caproverGetLoadBalancerInfo,
+  caproverGetAppsAndRoot,
 } = require('./caproverClient');
 
 // Load .env file only in local development (not in CapRover)
@@ -2027,6 +2034,125 @@ app.delete('/api/apps/:appName', requireAuth, async (req, res) => {
       success: false, 
       error: error.message || 'Failed to delete CapRover app' 
     });
+  }
+});
+
+// ─── Ops: app logs, restart, system overview, health checks ──────────────────
+
+// Get an app's runtime (container) logs (protected)
+app.get('/api/apps/:appName/logs', requireAuth, async (req, res) => {
+  const { appName } = req.params;
+  try {
+    if (!CAPROVER_URL || !CAPROVER_PASSWORD) {
+      return res.status(400).json({ success: false, error: 'CapRover credentials not configured' });
+    }
+    const baseUrl = CAPROVER_URL.replace(/\/+$/, '');
+    const token = await caproverLogin(baseUrl, CAPROVER_PASSWORD);
+    const logs = await caproverGetAppLogs(baseUrl, token, appName);
+    res.json({ success: true, appName, logs });
+  } catch (error) {
+    console.error(`[${new Date().toISOString()}] Error getting app logs for ${appName}:`, error.message);
+    res.status(500).json({ success: false, error: error.message || 'Failed to get app logs' });
+  }
+});
+
+// Restart an app (scale instances 0 -> back) (protected)
+app.post('/api/apps/:appName/restart', requireAuth, async (req, res) => {
+  const requestId = Date.now();
+  const { appName } = req.params;
+  console.log(`[${new Date().toISOString()}] [REQUEST ${requestId}] POST /api/apps/${appName}/restart`);
+  try {
+    if (!CAPROVER_URL || !CAPROVER_PASSWORD) {
+      return res.status(400).json({ success: false, error: 'CapRover credentials not configured' });
+    }
+    const baseUrl = CAPROVER_URL.replace(/\/+$/, '');
+    const token = await caproverLogin(baseUrl, CAPROVER_PASSWORD);
+    const result = await caproverRestartApp(baseUrl, token, appName);
+    res.json({ success: true, message: `Restarted "${appName}"`, instanceCount: result.instanceCount });
+  } catch (error) {
+    console.error(`[${new Date().toISOString()}] [REQUEST ${requestId}] Error restarting ${appName}:`, error.message);
+    res.status(500).json({ success: false, error: error.message || 'Failed to restart app' });
+  }
+});
+
+// System / VPS overview (protected)
+app.get('/api/system/overview', requireAuth, async (req, res) => {
+  try {
+    if (!CAPROVER_URL || !CAPROVER_PASSWORD) {
+      return res.status(400).json({ success: false, error: 'CapRover credentials not configured' });
+    }
+    const baseUrl = CAPROVER_URL.replace(/\/+$/, '');
+    const token = await caproverLogin(baseUrl, CAPROVER_PASSWORD);
+
+    // Gather independently so one failing piece doesn't sink the whole dashboard
+    const [info, nodes, version, lb, apps] = await Promise.allSettled([
+      caproverGetSystemInfo(baseUrl, token),
+      caproverGetNodes(baseUrl, token),
+      caproverGetVersionInfo(baseUrl, token),
+      caproverGetLoadBalancerInfo(baseUrl, token),
+      caproverListApps(baseUrl, token),
+    ]);
+
+    const val = (r, d) => (r.status === 'fulfilled' ? r.value : d);
+    const appList = val(apps, []);
+    const totalInstances = appList.reduce((sum, a) => sum + (a.instanceCount || 0), 0);
+
+    res.json({
+      success: true,
+      info: val(info, {}),
+      nodes: val(nodes, []),
+      version: val(version, {}),
+      loadBalancer: val(lb, {}),
+      appCount: appList.length,
+      totalInstances,
+    });
+  } catch (error) {
+    console.error(`[${new Date().toISOString()}] Error getting system overview:`, error.message);
+    res.status(500).json({ success: false, error: error.message || 'Failed to get system overview' });
+  }
+});
+
+// Health-check every web-exposed app by pinging its public URL (protected)
+app.get('/api/health-check', requireAuth, async (req, res) => {
+  try {
+    if (!CAPROVER_URL || !CAPROVER_PASSWORD) {
+      return res.status(400).json({ success: false, error: 'CapRover credentials not configured' });
+    }
+    const baseUrl = CAPROVER_URL.replace(/\/+$/, '');
+    const token = await caproverLogin(baseUrl, CAPROVER_PASSWORD);
+    const { apps, rootDomain } = await caproverGetAppsAndRoot(baseUrl, token);
+
+    // Only apps that are actually exposed as web apps can be pinged
+    const webApps = apps.filter(a => !a.notExposeAsWebApp);
+
+    const results = await Promise.all(webApps.map(async (a) => {
+      const customDomains = Array.isArray(a.customDomain)
+        ? a.customDomain.map(d => (typeof d === 'string' ? d : d.publicDomain)).filter(Boolean)
+        : [];
+      const host = customDomains[0] || (rootDomain ? `${a.appName}.${rootDomain}` : null);
+      if (!host) {
+        return { appName: a.appName, url: null, up: false, status: null, ms: null, error: 'no domain' };
+      }
+      const url = `https://${host}`;
+      const started = Date.now();
+      try {
+        const r = await axios.get(url, {
+          timeout: 8000,
+          maxRedirects: 3,
+          // any HTTP response (even 401/403/404) means the container is answering
+          validateStatus: () => true,
+        });
+        return { appName: a.appName, url, up: r.status < 500, status: r.status, ms: Date.now() - started };
+      } catch (err) {
+        return { appName: a.appName, url, up: false, status: null, ms: Date.now() - started, error: err.code || err.message };
+      }
+    }));
+
+    results.sort((x, y) => Number(x.up) - Number(y.up) || x.appName.localeCompare(y.appName));
+    res.json({ success: true, rootDomain, results });
+  } catch (error) {
+    console.error(`[${new Date().toISOString()}] Error running health check:`, error.message);
+    res.status(500).json({ success: false, error: error.message || 'Failed to run health check' });
   }
 });
 
