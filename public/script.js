@@ -90,6 +90,11 @@ function showPage(pageName) {
         const cb = document.getElementById('diagAutoRefresh');
         if (cb) cb.checked = false;
     }
+    // Stop the monitored-summary refresh when navigating away
+    if (monitorInterval && pageName !== 'diagnostics') {
+        clearInterval(monitorInterval);
+        monitorInterval = null;
+    }
     
     // Hide all pages
     document.querySelectorAll('.page-content').forEach(page => {
@@ -3526,6 +3531,8 @@ function toggleLogsAutoRefresh() {
 // ─── Diagnostics: persisted logs + crash journal ─────────────────────────────
 
 let diagInterval = null;
+let monitorInterval = null;
+let monitoredApps = new Set();
 
 async function initDiagnosticsPage() {
     const select = document.getElementById('diagAppSelect');
@@ -3553,11 +3560,144 @@ async function initDiagnosticsPage() {
             select.innerHTML = apps.map(a =>
                 `<option value="${escapeHtml(a.appName)}">${escapeHtml(a.appName)}</option>`
             ).join('');
+            select.onchange = updateMonitorBtn;
         } catch (error) {
             console.error('[initDiagnosticsPage] Error:', error);
             showToast(error.message || 'Failed to load apps', 'error');
         }
     }
+
+    // Load the watchlist + its live summary, and keep it refreshing
+    await loadMonitored();
+    if (monitorInterval) clearInterval(monitorInterval);
+    monitorInterval = setInterval(() => {
+        if (currentPage === 'diagnostics') loadMonitored();
+        else { clearInterval(monitorInterval); monitorInterval = null; }
+    }, 20000);
+}
+
+// Load monitored services + their recent activity summary
+async function loadMonitored() {
+    try {
+        const [listResp, summaryResp] = await Promise.all([
+            fetch('/api/diagnostics/monitored', { credentials: 'include' }),
+            fetch('/api/diagnostics/monitored/summary', { credentials: 'include' })
+        ]);
+        if (listResp.status === 401 || summaryResp.status === 401) { showLogin(); return; }
+        const listData = await listResp.json();
+        const summaryData = await summaryResp.json();
+        if (listData.success) monitoredApps = new Set(listData.monitored || []);
+        renderMonitored(summaryData.success ? (summaryData.summary || []) : []);
+        updateMonitorBtn();
+    } catch (error) {
+        console.error('[loadMonitored] Error:', error);
+    }
+}
+
+function renderMonitored(summary) {
+    const container = document.getElementById('monitoredList');
+    if (!container) return;
+    if (!summary.length) {
+        container.innerHTML = '<div class="empty-state"><p>No services monitored yet. Pick one below and click ★ Monitor to keep an eye on it.</p></div>';
+        return;
+    }
+    let html = '<div style="display: grid; gap: 8px;">';
+    summary.forEach(s => {
+        const name = escapeHtml(s.appName);
+        const restarts = s.restarts24h || 0;
+        const errors = s.errors24h || 0;
+        // Health heuristic from the last 24h of activity
+        const bad = errors > 0 || restarts >= 3;
+        const warn = restarts > 0;
+        const dot = bad ? 'down' : (warn ? 'warn' : 'up');
+        let lastText = 'No events recorded';
+        if (s.lastEvent) {
+            const when = new Date(s.lastEvent.ts).toLocaleString();
+            lastText = `Last: ${s.lastEvent.type === 'error-burst' ? '🔴 error' : '🔄 restart'} · ${escapeHtml(when)}`;
+        }
+        html += `
+            <div class="manage-item-single reboot-item" data-app-name="${name}">
+                <span class="status-dot ${dot}"></span>
+                <div style="flex: 1; min-width: 0;">
+                    <div style="font-weight: 600; color: var(--text-primary);">${name}</div>
+                    <div style="font-size: 0.85rem; color: var(--text-secondary);">${lastText}</div>
+                </div>
+                <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
+                    <span class="mon-badge ${restarts > 0 ? 'mon-badge-warn' : ''}" title="Restarts in last 24h">🔄 ${restarts}</span>
+                    <span class="mon-badge ${errors > 0 ? 'mon-badge-error' : ''}" title="Error bursts in last 24h">🔴 ${errors}</span>
+                    <button onclick="investigateApp('${name}')" class="btn-secondary" style="width: auto; padding: 7px 12px; font-size: 0.85rem;">Investigate</button>
+                    <button onclick="unmonitorService('${name}')" class="btn-secondary" style="width: auto; padding: 7px 12px; font-size: 0.85rem;">Unmonitor</button>
+                </div>
+            </div>`;
+    });
+    html += '</div>';
+    container.innerHTML = html;
+}
+
+function updateMonitorBtn() {
+    const btn = document.getElementById('monitorToggleBtn');
+    const select = document.getElementById('diagAppSelect');
+    if (!btn || !select) return;
+    const isMon = monitoredApps.has(select.value);
+    btn.textContent = isMon ? '★ Monitoring' : '★ Monitor';
+    btn.classList.toggle('monitoring', isMon);
+}
+
+async function toggleMonitor() {
+    const select = document.getElementById('diagAppSelect');
+    if (!select || !select.value) { showToast('Select a service first', 'info'); return; }
+    const appName = select.value;
+    if (monitoredApps.has(appName)) {
+        await unmonitorService(appName);
+    } else {
+        try {
+            const resp = await fetch('/api/diagnostics/monitored', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ appName })
+            });
+            if (resp.status === 401) { showLogin(); return; }
+            const data = await resp.json();
+            if (!data.success) throw new Error(data.error || 'Failed to monitor');
+            monitoredApps.add(appName);
+            showToast(`Now monitoring "${appName}"`, 'success');
+            updateMonitorBtn();
+            loadMonitored();
+        } catch (error) {
+            showErrorModal('Monitor Failed', error.message || 'Could not add to watchlist.');
+        }
+    }
+}
+
+async function unmonitorService(appName) {
+    try {
+        const resp = await fetch(`/api/diagnostics/monitored/${encodeURIComponent(appName)}`, {
+            method: 'DELETE',
+            credentials: 'include'
+        });
+        if (resp.status === 401) { showLogin(); return; }
+        const data = await resp.json();
+        if (!data.success) throw new Error(data.error || 'Failed to unmonitor');
+        monitoredApps.delete(appName);
+        showToast(`Stopped monitoring "${appName}"`, 'info');
+        updateMonitorBtn();
+        loadMonitored();
+    } catch (error) {
+        showErrorModal('Unmonitor Failed', error.message || 'Could not update watchlist.');
+    }
+}
+
+// Jump to a service in the investigator (from a monitored card)
+function investigateApp(appName) {
+    const select = document.getElementById('diagAppSelect');
+    if (select) {
+        select.value = appName;
+        updateMonitorBtn();
+    }
+    loadDiagnostics();
+    const el = document.getElementById('diagEvents');
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 async function loadDiagnostics() {

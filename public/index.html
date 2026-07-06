@@ -516,9 +516,18 @@
                         background (<span id="diagPollInfo">every 30s</span>).
                     </p>
 
+                    <div class="form-card">
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; gap: 12px; flex-wrap: wrap;">
+                            <h3 style="margin: 0;">📡 Monitored services</h3>
+                            <span style="font-size: 0.8rem; color: var(--text-secondary);">auto-refreshing</span>
+                        </div>
+                        <div id="monitoredList"><p style="color: var(--text-secondary);">Loading…</p></div>
+                    </div>
+
                     <div class="form-card reboot-toolbar">
                         <select id="diagAppSelect" class="logs-select"></select>
                         <button onclick="loadDiagnostics()" class="btn-primary" style="width: auto;">🔍 Investigate</button>
+                        <button id="monitorToggleBtn" onclick="toggleMonitor()" class="btn-secondary" style="width: auto;">★ Monitor</button>
                         <label class="logs-autorefresh">
                             <input type="checkbox" id="diagAutoRefresh" onchange="toggleDiagAutoRefresh()"> Auto-refresh (10s)
                         </label>

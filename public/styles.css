@@ -1535,3 +1535,38 @@ h2, h3 { letter-spacing: -0.01em; }
 
 /* Consoles: slightly softer corners to match cards */
 .reboot-console-wrap.reboot-inline-console { border-radius: 14px; }
+
+/* ─── Monitored services (diagnostics watchlist) ────────────────────────── */
+
+.mon-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 0.8rem;
+    padding: 3px 9px;
+    border-radius: 999px;
+    background: var(--card-hover);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-color);
+    white-space: nowrap;
+}
+
+.mon-badge-warn {
+    background: rgba(251, 191, 36, 0.14);
+    color: var(--warning-color);
+    border-color: rgba(251, 191, 36, 0.3);
+}
+
+.mon-badge-error {
+    background: rgba(248, 113, 113, 0.14);
+    color: var(--error-color);
+    border-color: rgba(248, 113, 113, 0.3);
+}
+
+.status-dot.warn { background: var(--warning-color); box-shadow: 0 0 8px rgba(251, 191, 36, 0.6); }
+
+#monitorToggleBtn.monitoring {
+    color: var(--warning-color);
+    border-color: rgba(251, 191, 36, 0.4);
+    background: rgba(251, 191, 36, 0.1);
+}

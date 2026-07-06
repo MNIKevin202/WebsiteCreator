@@ -183,6 +183,13 @@ const crashEventSchema = new mongoose.Schema({
 crashEventSchema.index({ ts: 1 }, { expireAfterSeconds: 60 * 60 * 24 * 30 }); // keep 30 days
 const CrashEvent = mongoose.model('crashEvent', crashEventSchema, 'crashEvents');
 
+// Services the user explicitly wants to keep an eye on (diagnostics watchlist)
+const monitoredServiceSchema = new mongoose.Schema({
+  appName: { type: String, required: true, unique: true },
+  createdAt: { type: Date, default: Date.now }
+});
+const MonitoredService = mongoose.model('monitoredService', monitoredServiceSchema, 'monitoredServices');
+
 // Collector configuration + heuristics
 const DIAG_POLL_MS = Math.max(parseInt(process.env.DIAG_POLL_INTERVAL_MS || '30000', 10), 10000);
 const DIAG_STARTUP_MARKER = /(listening on|server (is )?running|app listening|ready on|server started|discord client ready|bot ready|nodemon|connected to mongo)/i;
@@ -2347,6 +2354,73 @@ app.get('/api/diagnostics/status', requireAuth, async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message || 'Failed to read diagnostics status' });
+  }
+});
+
+// List monitored (watched) services (protected)
+app.get('/api/diagnostics/monitored', requireAuth, async (req, res) => {
+  try {
+    if (!MONGO_URI) return res.status(500).json({ success: false, error: 'MongoDB not configured' });
+    const items = await MonitoredService.find().sort({ createdAt: 1 }).lean();
+    res.json({ success: true, monitored: items.map(m => m.appName) });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message || 'Failed to list monitored services' });
+  }
+});
+
+// Add a service to the watchlist (protected)
+app.post('/api/diagnostics/monitored', requireAuth, async (req, res) => {
+  try {
+    if (!MONGO_URI) return res.status(500).json({ success: false, error: 'MongoDB not configured' });
+    const appName = String(req.body?.appName || '').trim();
+    if (!appName || !/^[a-z0-9-]+$/i.test(appName)) {
+      return res.status(400).json({ success: false, error: 'Invalid app name' });
+    }
+    await MonitoredService.updateOne({ appName }, { $set: { appName } }, { upsert: true });
+    res.json({ success: true, message: `Monitoring "${appName}"` });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message || 'Failed to monitor service' });
+  }
+});
+
+// Remove a service from the watchlist (protected)
+app.delete('/api/diagnostics/monitored/:appName', requireAuth, async (req, res) => {
+  try {
+    if (!MONGO_URI) return res.status(500).json({ success: false, error: 'MongoDB not configured' });
+    await MonitoredService.deleteOne({ appName: req.params.appName });
+    res.json({ success: true, message: `Stopped monitoring "${req.params.appName}"` });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message || 'Failed to unmonitor service' });
+  }
+});
+
+// Live summary for each monitored service: recent restart/error counts + last event (protected)
+app.get('/api/diagnostics/monitored/summary', requireAuth, async (req, res) => {
+  try {
+    if (!MONGO_URI) return res.status(500).json({ success: false, error: 'MongoDB not configured' });
+    const items = await MonitoredService.find().sort({ createdAt: 1 }).lean();
+    const names = items.map(m => m.appName);
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+    const summary = await Promise.all(names.map(async (appName) => {
+      const [restarts24h, errors24h, lastEventArr] = await Promise.all([
+        CrashEvent.countDocuments({ appName, type: 'restart', ts: { $gte: since } }),
+        CrashEvent.countDocuments({ appName, type: 'error-burst', ts: { $gte: since } }),
+        CrashEvent.find({ appName }).sort({ ts: -1 }).limit(1).lean()
+      ]);
+      const last = lastEventArr[0] || null;
+      return {
+        appName,
+        restarts24h,
+        errors24h,
+        lastEvent: last ? { ts: last.ts, type: last.type, note: last.note } : null
+      };
+    }));
+
+    res.json({ success: true, summary });
+  } catch (error) {
+    console.error(`[${new Date().toISOString()}] Error building monitored summary:`, error.message);
+    res.status(500).json({ success: false, error: error.message || 'Failed to build summary' });
   }
 });
 
