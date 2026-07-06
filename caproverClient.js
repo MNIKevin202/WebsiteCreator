@@ -436,16 +436,13 @@ async function caproverForceBuild(baseUrl, token, appName) {
     throw new Error(`App "${appName}" not found on CapRover`);
   }
 
-  // Primary field name across CapRover versions is appPushWebhookToken.
-  // Fall back to scanning for any key containing "webhook" to tolerate version differences.
-  let webhookToken = app.appPushWebhookToken;
-  if (!webhookToken) {
-    const webhookKey = Object.keys(app).find(k => /webhook/i.test(k) && typeof app[k] === 'string' && app[k]);
-    if (webhookKey) webhookToken = app[webhookKey];
-  }
+  // CapRover stores the signed webhook JWT at appPushWebhook.pushWebhookToken (this is exactly
+  // what the dashboard's "Force Build" button uses). It only exists once the app has git
+  // deployment configured (repo/branch saved).
+  const webhookToken = app.appPushWebhook && app.appPushWebhook.pushWebhookToken;
 
   if (!webhookToken) {
-    throw new Error(`No webhook token for "${appName}". Configure GitHub deployment for this app first (Deployment tab → repo/branch/credentials), then try again.`);
+    throw new Error(`No webhook token for "${appName}". This app has no GitHub deployment configured — open it in CapRover → Deployment tab, enter the repo/branch and save, then try again.`);
   }
 
   // The triggerbuild webhook authorizes via the ?token= query param and needs NO x-captain-auth

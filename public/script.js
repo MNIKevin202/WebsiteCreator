@@ -3081,7 +3081,7 @@ async function forceBuildApp(appName) {
 // Poll CapRover build logs and stream new lines until the build finishes.
 async function pollBuildLogs(appName) {
     const maxAttempts = 120; // ~5 minutes at 2.5s intervals
-    let printedCount = 0;
+    let lastPrintedAbs = null; // absolute line number printed so far (CapRover log buffer rolls)
     let sawBuilding = false;
 
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
@@ -3109,17 +3109,25 @@ async function pollBuildLogs(appName) {
             return;
         }
 
-        // Print only the new log lines since last poll
+        // CapRover exposes a rolling buffer: logs.lines[] with logs.firstLineNumber = absolute
+        // index of lines[0]. Print only lines we haven't printed yet, tolerating buffer rolls.
         const lines = (data.logs && Array.isArray(data.logs.lines)) ? data.logs.lines : [];
-        if (lines.length < printedCount) {
-            // Log buffer rotated/reset - reprint from the start
-            printedCount = 0;
+        const firstLineNumber = (data.logs && typeof data.logs.firstLineNumber === 'number') ? data.logs.firstLineNumber : 0;
+        let startIdx;
+        if (lastPrintedAbs === null) {
+            startIdx = 0; // first poll: print whatever is currently buffered
+        } else {
+            startIdx = lastPrintedAbs - firstLineNumber;
+            if (startIdx < 0) {
+                rebootLog('  [[ …earlier build output truncated… ]]', 'dim');
+                startIdx = 0;
+            }
         }
-        for (let i = printedCount; i < lines.length; i++) {
+        for (let i = startIdx; i < lines.length; i++) {
             const text = String(lines[i]).replace(/\s+$/, '');
             if (text) rebootLog(`  ${text}`, 'dim');
         }
-        printedCount = lines.length;
+        lastPrintedAbs = firstLineNumber + lines.length;
 
         if (data.isAppBuilding) {
             sawBuilding = true;
