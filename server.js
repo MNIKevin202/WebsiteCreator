@@ -2424,6 +2424,51 @@ app.get('/api/diagnostics/monitored/summary', requireAuth, async (req, res) => {
   }
 });
 
+// Live feed for the always-on monitor console: recent crash events + error log
+// lines for monitored services, newer than `since` (ms epoch). (protected)
+app.get('/api/diagnostics/monitored/feed', requireAuth, async (req, res) => {
+  try {
+    if (!MONGO_URI) return res.status(500).json({ success: false, error: 'MongoDB not configured' });
+
+    const now = Date.now();
+    let since = parseInt(req.query.since, 10);
+    if (!Number.isFinite(since) || since <= 0) since = now - 6 * 60 * 60 * 1000; // default: last 6h
+    const sinceDate = new Date(since);
+
+    const monitored = await MonitoredService.find().lean();
+    const names = monitored.map(m => m.appName);
+    if (names.length === 0) {
+      return res.json({ success: true, now, items: [] });
+    }
+
+    // Crash/restart events + error-flagged log chunks since the cursor
+    const [events, logChunks] = await Promise.all([
+      CrashEvent.find({ appName: { $in: names }, ts: { $gt: sinceDate } }).sort({ ts: 1 }).limit(300).lean(),
+      AppLogChunk.find({ appName: { $in: names }, hasError: true, ts: { $gt: sinceDate } }).sort({ ts: 1 }).limit(300).lean()
+    ]);
+
+    const items = [];
+    events.forEach(e => items.push({
+      ts: e.ts,
+      appName: e.appName,
+      kind: e.type === 'error-burst' ? 'error' : 'restart',
+      text: e.note || (e.type === 'error-burst' ? 'error burst' : 'restart')
+    }));
+    logChunks.forEach(c => items.push({
+      ts: c.ts,
+      appName: c.appName,
+      kind: 'log',
+      text: c.text || ''
+    }));
+
+    items.sort((a, b) => new Date(a.ts) - new Date(b.ts));
+    res.json({ success: true, now, items: items.slice(-400) });
+  } catch (error) {
+    console.error(`[${new Date().toISOString()}] Error building monitor feed:`, error.message);
+    res.status(500).json({ success: false, error: error.message || 'Failed to build feed' });
+  }
+});
+
 // ─── Reboot VPS recovery: pinned services + force build ──────────────────────
 
 // List pinned services (protected)

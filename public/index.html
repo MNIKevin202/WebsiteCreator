@@ -108,6 +108,7 @@
             <header class="topbar">
                 <button class="sidebar-toggle" onclick="toggleSidebar()" aria-label="Toggle menu">☰</button>
                 <h1 id="pageTitle">Create Website</h1>
+                <button class="rail-toggle" onclick="toggleMonitorRail()" aria-label="Toggle monitor" title="Monitor">📡</button>
             </header>
             <main class="content-area">
 
@@ -549,8 +550,25 @@
                 </div>
             </main>
         </div>
+
+        <!-- Always-on monitor rail -->
+        <aside class="monitor-rail" id="monitorRail">
+            <div class="rail-header">
+                <span class="rail-title">📡 Monitor</span>
+                <span class="rail-live"><span class="live-dot"></span> live</span>
+            </div>
+            <div class="rail-stats" id="railStats">
+                <p class="rail-empty">No services monitored yet — add some on the Diagnostics page.</p>
+            </div>
+            <div class="rail-console-head">
+                <span>Error console</span>
+                <button onclick="clearRailConsole()" class="rail-clear">Clear</button>
+            </div>
+            <div class="rail-console" id="railConsole"></div>
+        </aside>
     </div>
     <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
+    <div class="rail-overlay" id="railOverlay" onclick="toggleMonitorRail()"></div>
 
     <!-- Error Modal -->
     <div id="errorModal" class="modal" style="display: none;">

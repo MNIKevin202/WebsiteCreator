@@ -38,12 +38,14 @@ document.addEventListener('visibilitychange', () => {
 function showLogin() {
     document.getElementById('loginView').style.display = 'flex';
     document.getElementById('dashboard').style.display = 'none';
+    stopMonitorRail();
 }
 
 function showDashboard() {
     document.getElementById('loginView').style.display = 'none';
     document.getElementById('dashboard').style.display = 'flex';
     showPage('create'); // Default to create page
+    startMonitorRail(); // always-on monitor console
 }
 
 // Sidebar (mobile) toggle
@@ -3690,6 +3692,7 @@ async function unmonitorService(appName) {
 
 // Jump to a service in the investigator (from a monitored card)
 function investigateApp(appName) {
+    showPage('diagnostics');
     const select = document.getElementById('diagAppSelect');
     if (select) {
         select.value = appName;
@@ -3698,6 +3701,106 @@ function investigateApp(appName) {
     loadDiagnostics();
     const el = document.getElementById('diagEvents');
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+// ─── Always-on monitor rail (global, every page) ─────────────────────────────
+
+let monitorRailInterval = null;
+let monitorFeedSince = 0;
+const RAIL_ERROR_RE = /(error|exception|unhandled|fatal|ECONNREFUSED|EADDRINUSE|out of memory|heap|killed|panic|crash)/i;
+
+function startMonitorRail() {
+    monitorFeedSince = 0; // first fetch pulls recent history (server picks the window)
+    const consoleEl = document.getElementById('railConsole');
+    if (consoleEl) consoleEl.innerHTML = '';
+    refreshMonitorRail();
+    if (monitorRailInterval) clearInterval(monitorRailInterval);
+    monitorRailInterval = setInterval(refreshMonitorRail, 12000);
+}
+
+function stopMonitorRail() {
+    if (monitorRailInterval) { clearInterval(monitorRailInterval); monitorRailInterval = null; }
+}
+
+function refreshMonitorRail() {
+    renderRailStats();
+    pollMonitorFeed();
+}
+
+async function renderRailStats() {
+    const el = document.getElementById('railStats');
+    if (!el) return;
+    try {
+        const resp = await fetch('/api/diagnostics/monitored/summary', { credentials: 'include' });
+        if (resp.status === 401) return;
+        const data = await resp.json();
+        if (!data.success) return;
+        const summary = data.summary || [];
+        if (!summary.length) {
+            el.innerHTML = '<p class="rail-empty">No services monitored yet — add some on the Diagnostics page.</p>';
+            return;
+        }
+        el.innerHTML = summary.map(s => {
+            const restarts = s.restarts24h || 0, errors = s.errors24h || 0;
+            const dot = (errors > 0 || restarts >= 3) ? 'down' : (restarts > 0 ? 'warn' : 'up');
+            return `<div class="rail-stat">
+                <span class="status-dot ${dot}"></span>
+                <span class="rail-stat-name" title="${escapeHtml(s.appName)}">${escapeHtml(s.appName)}</span>
+                <span class="rail-stat-counts">🔄 ${restarts} · 🔴 ${errors}</span>
+            </div>`;
+        }).join('');
+    } catch (e) { /* transient */ }
+}
+
+async function pollMonitorFeed() {
+    try {
+        const resp = await fetch(`/api/diagnostics/monitored/feed?since=${monitorFeedSince}`, { credentials: 'include' });
+        if (resp.status === 401) return;
+        const data = await resp.json();
+        if (!data.success) return;
+        (data.items || []).forEach(railAppend);
+        if (data.now) monitorFeedSince = data.now;
+    } catch (e) { /* transient */ }
+}
+
+function railAppend(item) {
+    const consoleEl = document.getElementById('railConsole');
+    if (!consoleEl) return;
+    const t = new Date(item.ts).toLocaleTimeString();
+    const app = item.appName || '';
+    const push = (text, cls) => {
+        const div = document.createElement('div');
+        div.className = 'rc-line ' + cls;
+        div.textContent = `[${t}] ${app}: ${text}`;
+        consoleEl.appendChild(div);
+    };
+    if (item.kind === 'error') {
+        push(item.text, 'rc-error');
+    } else if (item.kind === 'restart') {
+        push(item.text, 'rc-warn');
+    } else {
+        // log chunk — one console line per source line, error lines highlighted
+        String(item.text || '').split('\n').forEach(line => {
+            const l = line.replace(/\s+$/, '');
+            if (!l) return;
+            push(l, RAIL_ERROR_RE.test(l) ? 'rc-error' : 'rc-dim');
+        });
+    }
+    while (consoleEl.childElementCount > 600) consoleEl.removeChild(consoleEl.firstChild);
+    consoleEl.scrollTop = consoleEl.scrollHeight;
+}
+
+function clearRailConsole() {
+    const el = document.getElementById('railConsole');
+    if (el) el.innerHTML = '';
+}
+
+function toggleMonitorRail() {
+    const rail = document.getElementById('monitorRail');
+    const overlay = document.getElementById('railOverlay');
+    if (!rail) return;
+    const open = rail.classList.toggle('open');
+    if (overlay) overlay.classList.toggle('visible', open);
 }
 
 async function loadDiagnostics() {
