@@ -60,6 +60,13 @@ function showPage(pageName) {
         const cb = document.getElementById('logsAutoRefresh');
         if (cb) cb.checked = false;
     }
+    // Stop the diagnostics auto-refresh when navigating away
+    if (diagInterval && pageName !== 'diagnostics') {
+        clearInterval(diagInterval);
+        diagInterval = null;
+        const cb = document.getElementById('diagAutoRefresh');
+        if (cb) cb.checked = false;
+    }
     
     // Hide all pages
     document.querySelectorAll('.page-content').forEach(page => {
@@ -106,6 +113,8 @@ function showPage(pageName) {
         loadSystem();
     } else if (pageName === 'logs') {
         initLogsPage();
+    } else if (pageName === 'diagnostics') {
+        initDiagnosticsPage();
     }
 }
 
@@ -3478,5 +3487,133 @@ function toggleLogsAutoRefresh() {
             if (currentPage === 'logs') loadAppLogs();
             else { clearInterval(logsInterval); logsInterval = null; }
         }, 5000);
+    }
+}
+
+// ─── Diagnostics: persisted logs + crash journal ─────────────────────────────
+
+let diagInterval = null;
+
+async function initDiagnosticsPage() {
+    const select = document.getElementById('diagAppSelect');
+
+    // Show the collector's poll interval
+    try {
+        const statusResp = await fetch('/api/diagnostics/status', { credentials: 'include' });
+        if (statusResp.status === 401) { showLogin(); return; }
+        const status = await statusResp.json();
+        if (status.success) {
+            const secs = Math.round((status.pollMs || 30000) / 1000);
+            const info = document.getElementById('diagPollInfo');
+            if (info) info.textContent = `every ${secs}s`;
+        }
+    } catch (e) { /* non-fatal */ }
+
+    // Populate the app list once (keep selection on revisits)
+    if (select.options.length === 0) {
+        try {
+            const response = await fetch('/api/apps', { credentials: 'include' });
+            if (response.status === 401) { showLogin(); return; }
+            const data = await response.json();
+            if (!data.success) throw new Error(data.error || 'Failed to load apps');
+            const apps = (data.apps || []).slice().sort((a, b) => a.appName.localeCompare(b.appName));
+            select.innerHTML = apps.map(a =>
+                `<option value="${escapeHtml(a.appName)}">${escapeHtml(a.appName)}</option>`
+            ).join('');
+        } catch (error) {
+            console.error('[initDiagnosticsPage] Error:', error);
+            showToast(error.message || 'Failed to load apps', 'error');
+        }
+    }
+}
+
+async function loadDiagnostics() {
+    const appName = document.getElementById('diagAppSelect').value;
+    if (!appName) { showToast('Select a service first', 'info'); return; }
+
+    document.getElementById('diagLogsHeader').textContent = `Stored logs — ${appName}`;
+    document.getElementById('diagStatus').textContent = 'loading…';
+
+    try {
+        const [eventsResp, logsResp] = await Promise.all([
+            fetch(`/api/diagnostics/${encodeURIComponent(appName)}/events`, { credentials: 'include' }),
+            fetch(`/api/diagnostics/${encodeURIComponent(appName)}/logs`, { credentials: 'include' })
+        ]);
+        if (eventsResp.status === 401 || logsResp.status === 401) { showLogin(); return; }
+
+        const eventsData = await eventsResp.json();
+        const logsData = await logsResp.json();
+        if (!eventsData.success) throw new Error(eventsData.error || 'Failed to load events');
+        if (!logsData.success) throw new Error(logsData.error || 'Failed to load logs');
+
+        renderDiagEvents(eventsData.events || []);
+        renderDiagLogs(logsData.chunks || []);
+
+        document.getElementById('diagStatus').textContent = `updated ${new Date().toLocaleTimeString()}`;
+    } catch (error) {
+        console.error('[loadDiagnostics] Error:', error);
+        document.getElementById('diagStatus').textContent = '';
+        showErrorModal('Diagnostics Failed', error.message || 'Failed to load diagnostics.');
+    }
+}
+
+function renderDiagEvents(events) {
+    const container = document.getElementById('diagEvents');
+    if (!events.length) {
+        container.innerHTML = '<div class="empty-state"><p>No crashes or restarts recorded yet. If the service is stable that\'s good — otherwise give the collector a cycle or two.</p></div>';
+        return;
+    }
+    let html = '<div style="display: grid; gap: 8px;">';
+    events.forEach(ev => {
+        const when = new Date(ev.ts).toLocaleString();
+        const isError = ev.type === 'error-burst';
+        const icon = isError ? '🔴' : '🔄';
+        const label = isError ? 'Error burst' : 'Restart';
+        html += `
+            <div class="diag-event ${isError ? 'diag-event-error' : 'diag-event-restart'}">
+                <div class="diag-event-head">
+                    <span>${icon} <strong>${label}</strong></span>
+                    <span class="diag-event-time">${escapeHtml(when)}</span>
+                </div>
+                <div class="diag-event-note">${escapeHtml(ev.note || '')}</div>
+                ${ev.logSnapshot ? `<pre class="diag-event-snap">${escapeHtml(ev.logSnapshot)}</pre>` : ''}
+            </div>`;
+    });
+    html += '</div>';
+    container.innerHTML = html;
+}
+
+function renderDiagLogs(chunks) {
+    const consoleEl = document.getElementById('diagLogsConsole');
+    if (!chunks.length) {
+        consoleEl.innerHTML = '<div class="rc-line rc-dim">No stored logs yet for this service. The collector saves new log lines each cycle — check back shortly.</div>';
+        return;
+    }
+    const frag = document.createDocumentFragment();
+    chunks.forEach(chunk => {
+        const stamp = new Date(chunk.ts).toLocaleTimeString();
+        (chunk.text || '').split('\n').forEach(line => {
+            if (!line) return;
+            const div = document.createElement('div');
+            const isErr = /(error|exception|unhandled|fatal|ECONNREFUSED|EADDRINUSE|out of memory|heap|killed|panic)/i.test(line);
+            div.className = 'rc-line ' + (isErr ? 'rc-error' : 'rc-dim');
+            div.textContent = `[${stamp}] ${line}`;
+            frag.appendChild(div);
+        });
+    });
+    consoleEl.innerHTML = '';
+    consoleEl.appendChild(frag);
+    consoleEl.scrollTop = consoleEl.scrollHeight;
+}
+
+function toggleDiagAutoRefresh() {
+    const cb = document.getElementById('diagAutoRefresh');
+    if (diagInterval) { clearInterval(diagInterval); diagInterval = null; }
+    if (cb.checked) {
+        loadDiagnostics();
+        diagInterval = setInterval(() => {
+            if (currentPage === 'diagnostics') loadDiagnostics();
+            else { clearInterval(diagInterval); diagInterval = null; }
+        }, 10000);
     }
 }

@@ -141,6 +141,125 @@ const pinnedServiceSchema = new mongoose.Schema({
 
 const PinnedService = mongoose.model('pinnedService', pinnedServiceSchema, 'pinnedServices');
 
+// ─── Diagnostics: persisted logs + crash/restart journal ─────────────────────
+// Capped collection = rolling log history that auto-evicts oldest, so logs
+// survive container crashes/restarts (unlike CapRover's ephemeral live buffer).
+const appLogChunkSchema = new mongoose.Schema({
+  appName: { type: String, index: true },
+  ts: { type: Date, default: Date.now },
+  text: String,
+  hasError: { type: Boolean, default: false }
+}, { capped: { size: 1024 * 1024 * 50, max: 200000 } }); // ~50MB rolling window
+appLogChunkSchema.index({ appName: 1, ts: 1 });
+const AppLogChunk = mongoose.model('appLogChunk', appLogChunkSchema, 'appLogChunks');
+
+const crashEventSchema = new mongoose.Schema({
+  appName: { type: String, index: true },
+  ts: { type: Date, default: Date.now },
+  type: { type: String },       // 'restart' | 'error-burst'
+  note: String,
+  logSnapshot: String
+});
+crashEventSchema.index({ ts: 1 }, { expireAfterSeconds: 60 * 60 * 24 * 30 }); // keep 30 days
+const CrashEvent = mongoose.model('crashEvent', crashEventSchema, 'crashEvents');
+
+// Collector configuration + heuristics
+const DIAG_POLL_MS = Math.max(parseInt(process.env.DIAG_POLL_INTERVAL_MS || '30000', 10), 10000);
+const DIAG_STARTUP_MARKER = /(listening on|server (is )?running|app listening|ready on|server started|discord client ready|bot ready|nodemon|connected to mongo)/i;
+const DIAG_ERROR_MARKER = /(error|exception|unhandled|fatal|ECONNREFUSED|EADDRINUSE|out of memory|heap out|FATAL|killed|segfault|panic)/i;
+// In-memory anchor of the last log line we stored per app (to append only new lines)
+const diagLastLineByApp = new Map();
+
+async function collectDiagnosticsOnce() {
+  if (!MONGO_URI || !CAPROVER_URL || !CAPROVER_PASSWORD) return;
+  const baseUrl = CAPROVER_URL.replace(/\/+$/, '');
+
+  let token;
+  try {
+    token = await caproverLogin(baseUrl, CAPROVER_PASSWORD);
+  } catch (e) {
+    return; // CapRover unreachable this cycle; try again next tick
+  }
+
+  let apps;
+  try {
+    apps = await caproverListApps(baseUrl, token);
+  } catch (e) {
+    return;
+  }
+
+  for (const app of apps) {
+    const appName = app.appName;
+    try {
+      const logs = await caproverGetAppLogs(baseUrl, token, appName);
+      if (!logs) continue;
+      const lines = logs.split('\n').filter(l => l.length > 0);
+      if (!lines.length) continue;
+
+      const anchor = diagLastLineByApp.get(appName);
+      let newLines;
+      let bufferReset = false;
+
+      if (anchor == null) {
+        // First capture since collector (re)start: keep only a recent tail to avoid a dump
+        newLines = lines.slice(-Math.min(lines.length, 150));
+      } else {
+        const idx = lines.lastIndexOf(anchor);
+        if (idx >= 0) {
+          newLines = lines.slice(idx + 1);
+        } else {
+          // Our last-known line is gone: either heavy logging scrolled it out, or the
+          // container restarted (fresh log buffer). Treat a startup marker as a restart.
+          newLines = lines;
+          bufferReset = true;
+        }
+      }
+
+      diagLastLineByApp.set(appName, lines[lines.length - 1]);
+      if (!newLines.length) continue;
+
+      const joined = newLines.join('\n');
+      const hasError = DIAG_ERROR_MARKER.test(joined);
+      await AppLogChunk.create({ appName, text: joined, hasError });
+
+      // Restart detection: a startup-marker line appears in the new output
+      const startLine = newLines.find(l => DIAG_STARTUP_MARKER.test(l));
+      if (startLine && (bufferReset || anchor != null)) {
+        await CrashEvent.create({
+          appName,
+          type: 'restart',
+          note: `(Re)start detected: ${startLine.slice(0, 160)}`,
+          logSnapshot: newLines.slice(0, 40).join('\n')
+        });
+      } else if (hasError) {
+        // Only log one error-burst event per cycle per app to avoid noise
+        await CrashEvent.create({
+          appName,
+          type: 'error-burst',
+          note: (newLines.find(l => DIAG_ERROR_MARKER.test(l)) || 'error in logs').slice(0, 160),
+          logSnapshot: newLines.filter(l => DIAG_ERROR_MARKER.test(l)).slice(0, 20).join('\n')
+        });
+      }
+    } catch (e) {
+      // Per-app failure (e.g. app has no running container yet) — ignore this cycle
+    }
+  }
+}
+
+function startDiagnosticsCollector() {
+  if (!MONGO_URI) {
+    console.warn(`[${new Date().toISOString()}] ⚠️  Diagnostics collector disabled (no MONGO_URI)`);
+    return;
+  }
+  if (!CAPROVER_URL || !CAPROVER_PASSWORD) {
+    console.warn(`[${new Date().toISOString()}] ⚠️  Diagnostics collector disabled (no CapRover credentials)`);
+    return;
+  }
+  console.log(`[${new Date().toISOString()}] 🩺 Diagnostics collector started (every ${DIAG_POLL_MS}ms)`);
+  setTimeout(() => { collectDiagnosticsOnce().catch(() => {}); }, 8000);
+  setInterval(() => { collectDiagnosticsOnce().catch(() => {}); }, DIAG_POLL_MS);
+}
+
 // Authentication middleware
 function requireAuth(req, res, next) {
   if (req.session && req.session.isAuthenticated) {
@@ -2156,6 +2275,61 @@ app.get('/api/health-check', requireAuth, async (req, res) => {
   }
 });
 
+// ─── Diagnostics: persisted logs + crash journal ─────────────────────────────
+
+// Get stored (historical) log chunks for an app (protected)
+app.get('/api/diagnostics/:appName/logs', requireAuth, async (req, res) => {
+  const { appName } = req.params;
+  try {
+    if (!MONGO_URI) return res.status(500).json({ success: false, error: 'MongoDB not configured' });
+    const limit = Math.min(parseInt(req.query.limit || '400', 10) || 400, 1500);
+    const chunks = await AppLogChunk.find({ appName }).sort({ ts: -1 }).limit(limit).lean();
+    // Return chronological (oldest first) for natural reading
+    res.json({
+      success: true,
+      appName,
+      chunks: chunks.reverse().map(c => ({ ts: c.ts, text: c.text, hasError: c.hasError }))
+    });
+  } catch (error) {
+    console.error(`[${new Date().toISOString()}] Error reading diagnostics logs for ${appName}:`, error.message);
+    res.status(500).json({ success: false, error: error.message || 'Failed to read stored logs' });
+  }
+});
+
+// Get crash/restart events for an app (protected)
+app.get('/api/diagnostics/:appName/events', requireAuth, async (req, res) => {
+  const { appName } = req.params;
+  try {
+    if (!MONGO_URI) return res.status(500).json({ success: false, error: 'MongoDB not configured' });
+    const events = await CrashEvent.find({ appName }).sort({ ts: -1 }).limit(100).lean();
+    res.json({ success: true, appName, events });
+  } catch (error) {
+    console.error(`[${new Date().toISOString()}] Error reading diagnostics events for ${appName}:`, error.message);
+    res.status(500).json({ success: false, error: error.message || 'Failed to read events' });
+  }
+});
+
+// Collector status (protected)
+app.get('/api/diagnostics/status', requireAuth, async (req, res) => {
+  try {
+    if (!MONGO_URI) return res.status(500).json({ success: false, error: 'MongoDB not configured' });
+    const [logChunks, events] = await Promise.all([
+      AppLogChunk.estimatedDocumentCount(),
+      CrashEvent.estimatedDocumentCount()
+    ]);
+    res.json({
+      success: true,
+      enabled: !!(CAPROVER_URL && CAPROVER_PASSWORD),
+      pollMs: DIAG_POLL_MS,
+      appsTracked: diagLastLineByApp.size,
+      logChunks,
+      events
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message || 'Failed to read diagnostics status' });
+  }
+});
+
 // ─── Reboot VPS recovery: pinned services + force build ──────────────────────
 
 // List pinned services (protected)
@@ -2370,6 +2544,9 @@ const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`   Health check: https://websitecreator.kpanel.xyz/api/health`);
   console.log(`   Test endpoint: https://websitecreator.kpanel.xyz/test`);
   console.log(`═══════════════════════════════════════════════════════`);
+
+  // Start the background diagnostics collector (persists logs + crash events)
+  startDiagnosticsCollector();
 });
 
 // Log server errors

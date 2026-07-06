@@ -91,6 +91,9 @@
                     <button onclick="showPage('logs')" id="nav-logs" class="nav-btn">
                         Logs
                     </button>
+                    <button onclick="showPage('diagnostics')" id="nav-diagnostics" class="nav-btn">
+                        Diagnostics
+                    </button>
                 </nav>
 
                 <!-- Create Website Page -->
@@ -486,6 +489,38 @@
                             <button onclick="clearAppLogs()" class="btn-secondary" style="width: auto; padding: 6px 12px; font-size: 0.85rem;">Clear</button>
                         </div>
                         <div id="appLogsConsole" class="reboot-console" style="height: 460px;"></div>
+                    </div>
+                </div>
+
+                <!-- Diagnostics Page -->
+                <div id="page-diagnostics" class="page-content" style="display: none;">
+                    <h2>Diagnostics</h2>
+                    <p style="color: var(--text-secondary); margin-bottom: 24px;">
+                        Persisted logs and a crash/restart journal for each service — so you can look back
+                        and see <em>why</em> something died, even after it restarted. Data is collected in the
+                        background (<span id="diagPollInfo">every 30s</span>).
+                    </p>
+
+                    <div class="form-card reboot-toolbar">
+                        <select id="diagAppSelect" class="logs-select"></select>
+                        <button onclick="loadDiagnostics()" class="btn-primary" style="width: auto;">🔍 Investigate</button>
+                        <label class="logs-autorefresh">
+                            <input type="checkbox" id="diagAutoRefresh" onchange="toggleDiagAutoRefresh()"> Auto-refresh (10s)
+                        </label>
+                        <span id="diagStatus" class="reboot-status"></span>
+                    </div>
+
+                    <div class="form-card">
+                        <h3 style="margin-bottom: 12px;">⚠️ Crash & restart journal</h3>
+                        <div id="diagEvents"><p style="color: var(--text-secondary);">Select a service and click Investigate.</p></div>
+                    </div>
+
+                    <div class="reboot-console-wrap form-card reboot-inline-console">
+                        <div class="reboot-console-header">
+                            <span id="diagLogsHeader">Stored logs</span>
+                            <span style="font-size: 0.8rem; color: var(--text-secondary);">error lines highlighted</span>
+                        </div>
+                        <div id="diagLogsConsole" class="reboot-console" style="height: 460px;"></div>
                     </div>
                 </div>
             </div>

@@ -1281,3 +1281,52 @@ footer {
     font-size: 0.9rem;
     cursor: pointer;
 }
+
+/* ─── Diagnostics: crash journal ────────────────────────────────────────── */
+
+.diag-event {
+    padding: 12px 14px;
+    background: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-left-width: 4px;
+    border-radius: 10px;
+}
+
+.diag-event-restart { border-left-color: var(--warning-color); }
+.diag-event-error { border-left-color: var(--error-color); }
+
+.diag-event-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    color: var(--text-primary);
+}
+
+.diag-event-time {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+.diag-event-note {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    margin-top: 4px;
+    word-break: break-word;
+}
+
+.diag-event-snap {
+    margin-top: 8px;
+    padding: 8px 10px;
+    background: #0d1117;
+    color: #c9d1d9;
+    border-radius: 8px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.78rem;
+    line-height: 1.4;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 140px;
+    overflow-y: auto;
+}
