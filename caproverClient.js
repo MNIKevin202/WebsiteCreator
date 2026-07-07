@@ -670,15 +670,28 @@ async function caproverDeleteOldImages(baseUrl, token, appName, keepCount = 5) {
 // ─── App logs, restart, system info (ops dashboard) ──────────────────────────
 
 // Strip Docker's multiplexed stream framing + ANSI codes so logs render cleanly.
+// Docker prepends an 8-byte header to each frame; converted to a string it leaves
+// 1-2 junk chars before each line. CapRover also prepends an RFC3339 timestamp, so
+// we cut everything before that timestamp, then drop the redundant Docker timestamp.
 function cleanDockerLogs(raw) {
-  const s = String(raw || '').replace(/\x1b\[[0-9;]*[A-Za-z]/g, '');
-  let out = '';
-  for (let i = 0; i < s.length; i++) {
-    const c = s.charCodeAt(i);
-    // keep tab (9), newline (10), carriage return (13), and any printable char (>= 32)
-    if (c === 9 || c === 10 || c === 13 || c >= 32) out += s[i];
-  }
-  return out.replace(/\r\n?/g, '\n');
+  const s = String(raw || '')
+    .replace(/\x1b\[[0-9;]*[A-Za-z]/g, '') // ANSI escape sequences
+    .replace(/\r\n?/g, '\n');
+
+  return s.split('\n').map(line => {
+    // Drop leftover control bytes (keep tab + printable)
+    let l = '';
+    for (let i = 0; i < line.length; i++) {
+      const c = line.charCodeAt(i);
+      if (c === 9 || c >= 32) l += line[i];
+    }
+    // Cut the Docker frame junk that sits just before the leading timestamp
+    const m = l.match(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
+    if (m && m.index > 0 && m.index <= 12) l = l.slice(m.index);
+    // Drop the redundant Docker-added timestamp prefix (the app keeps its own)
+    l = l.replace(/^\d{4}-\d{2}-\d{2}T[\d:.]+Z\s+/, '');
+    return l;
+  }).join('\n');
 }
 
 // Get an app's recent runtime (container) logs

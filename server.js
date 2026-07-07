@@ -224,22 +224,25 @@ async function collectDiagnosticsOnce() {
       if (!lines.length) continue;
 
       const anchor = diagLastLineByApp.get(appName);
+
+      // First capture after the collector (re)starts: just seed the anchor and record
+      // NOTHING. Otherwise every redeploy of this app would re-dump the existing log
+      // tail as "new", spamming duplicate blocks.
+      if (anchor == null) {
+        diagLastLineByApp.set(appName, lines[lines.length - 1]);
+        continue;
+      }
+
       let newLines;
       let bufferReset = false;
-
-      if (anchor == null) {
-        // First capture since collector (re)start: keep only a recent tail to avoid a dump
-        newLines = lines.slice(-Math.min(lines.length, 150));
+      const idx = lines.lastIndexOf(anchor);
+      if (idx >= 0) {
+        newLines = lines.slice(idx + 1);
       } else {
-        const idx = lines.lastIndexOf(anchor);
-        if (idx >= 0) {
-          newLines = lines.slice(idx + 1);
-        } else {
-          // Our last-known line is gone: either heavy logging scrolled it out, or the
-          // container restarted (fresh log buffer). Treat a startup marker as a restart.
-          newLines = lines;
-          bufferReset = true;
-        }
+        // Our last-known line is gone: either heavy logging scrolled it out, or the
+        // container restarted (fresh log buffer). Treat a startup marker as a restart.
+        newLines = lines;
+        bufferReset = true;
       }
 
       diagLastLineByApp.set(appName, lines[lines.length - 1]);
